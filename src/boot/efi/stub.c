@@ -86,32 +86,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table) {
 
         cmdline_len = szs[0];
 
-        /* if we are not in secure boot mode, accept a custom command line and replace the built-in one */
-        if (!secure && loaded_image->LoadOptionsSize > 0) {
-                CHAR16 *options;
-                CHAR8 *line;
-                UINTN i;
-
-                options = (CHAR16 *)loaded_image->LoadOptions;
-                cmdline_len = (loaded_image->LoadOptionsSize / sizeof(CHAR16)) * sizeof(CHAR8);
-                line = AllocatePool(cmdline_len);
-                for (i = 0; i < cmdline_len; i++)
-                        line[i] = options[i];
-                cmdline = line;
-
-#ifdef SD_BOOT_LOG_TPM
-                /* Try to log any options to the TPM, escpecially manually edited options */
-                err = tpm_log_event(SD_TPM_PCR,
-                                    (EFI_PHYSICAL_ADDRESS) loaded_image->LoadOptions,
-                                    loaded_image->LoadOptionsSize, loaded_image->LoadOptions);
-                if (EFI_ERROR(err)) {
-                        Print(L"Unable to add image options measurement: %r", err);
-                        uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-                        return err;
-                }
-#endif
-        }
-
         /* export the device path this image is started from */
         if (disk_get_part_uuid(loaded_image->DeviceHandle, uuid) == EFI_SUCCESS)
                 efivar_set(L"LoaderDevicePartUUID", uuid, FALSE);
