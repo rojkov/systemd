@@ -1227,4 +1227,9 @@ struct ethtool_link_settings {
 #define AF_VSOCK 40
 #endif
 
+#ifdef __UCLIBC__
+/* 10^x = 10^(log e^x) = (e^x)^log10 = e^(x * log 10) */
+#define exp10(x) (exp((x) * log(10)))
+#endif /* __UCLIBC__ */
+
 #include "missing_syscall.h"
