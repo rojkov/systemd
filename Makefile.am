@@ -214,7 +214,7 @@ AM_CPPFLAGS = \
 	-DROOTLIBDIR=\"$(rootlibdir)\" \
 	-DROOTLIBEXECDIR=\"$(rootlibexecdir)\" \
 	-DROOTHOMEDIR=\"$(roothomedir)\" \
-	-DTEST_DIR=\"$(testdir)/test\" \
+	-DTEST_DIR=\"/usr/lib/systemd/ptest/tests/test\" \
 	-I $(top_srcdir)/src \
 	-I $(top_builddir)/src/basic \
 	-I $(top_srcdir)/src/basic \
@@ -4251,7 +4251,7 @@ test_catalog_SOURCES = \
 
 test_catalog_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
-	-DCATALOG_DIR=\"$(abs_top_builddir)/catalog\"
+	-DCATALOG_DIR=\"/usr/lib/systemd/ptest/tests/catalog\"
 
 test_catalog_LDADD = \
 	libjournal-core.la
