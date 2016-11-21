@@ -208,6 +208,7 @@ int dns_resource_key_match_rr(const DnsResourceKey *key, DnsResourceRecord *rr, 
 
         if (key == rr->key)
                 return 1;
+        log_debug("Trying to match the key %s against rr's %s", dns_resource_key_name(key), dns_resource_key_name(rr->key));
 
         /* Checks if an rr matches the specified key. If a search
          * domain is specified, it will also be checked if the key
