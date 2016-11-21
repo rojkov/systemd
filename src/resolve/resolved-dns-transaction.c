@@ -142,7 +142,6 @@ DEFINE_TRIVIAL_CLEANUP_FUNC(DnsTransaction*, dns_transaction_free);
 bool dns_transaction_gc(DnsTransaction *t) {
         assert(t);
 
-        log_debug(" * dns_transaction_gc() ");
         if (t->block_gc > 0)
                 return true;
 
@@ -831,7 +830,6 @@ void dns_transaction_process_reply(DnsTransaction *t, DnsPacket *p) {
          * should hence not attempt to access the query or transaction
          * after calling this function. */
 
-        log_debug("* dns_transaction_process_reply() Enter");
         log_debug("Processing incoming packet on transaction %" PRIu16".", t->id);
 
         switch (t->scope->protocol) {
@@ -858,15 +856,11 @@ void dns_transaction_process_reply(DnsTransaction *t, DnsPacket *p) {
         case DNS_PROTOCOL_MDNS:
                 /* For mDNS we will not accept any packets from other interfaces */
 
-                if (p->ifindex != dns_scope_ifindex(t->scope)) {
-                        log_debug(" ! transaction failed 860");
+                if (p->ifindex != dns_scope_ifindex(t->scope))
                         return;
-                }
 
-                if (p->family != t->scope->family) {
-                        log_debug(" ! transaction failed 865");
+                if (p->family != t->scope->family)
                         return;
-                }
 
                 break;
 
@@ -1009,10 +1003,8 @@ void dns_transaction_process_reply(DnsTransaction *t, DnsPacket *p) {
         if (r > 0) /* Transaction got restarted... */
                 return;
 
-        switch (t->scope->protocol) {
+        if (IN_SET(t->scope->protocol, DNS_PROTOCOL_DNS, DNS_PROTOCOL_LLMNR)) {
 
-        case DNS_PROTOCOL_DNS:
-        case DNS_PROTOCOL_LLMNR:
                 /* Only consider responses with equivalent query section to the request */
                 r = dns_packet_is_reply_for(p, t->key);
                 if (r < 0)
@@ -1021,69 +1013,46 @@ void dns_transaction_process_reply(DnsTransaction *t, DnsPacket *p) {
                         dns_transaction_complete(t, DNS_TRANSACTION_INVALID_REPLY);
                         return;
                 }
+        }
 
-                /* Install the answer as answer to the transaction */
-                dns_answer_unref(t->answer);
-                t->answer = dns_answer_ref(p->answer);
-                t->answer_rcode = DNS_PACKET_RCODE(p);
-                t->answer_dnssec_result = _DNSSEC_RESULT_INVALID;
-                t->answer_authenticated = false;
+        /* Install the answer as answer to the transaction */
+        dns_answer_unref(t->answer);
+        t->answer = dns_answer_ref(p->answer);
+        t->answer_rcode = DNS_PACKET_RCODE(p);
+        t->answer_dnssec_result = _DNSSEC_RESULT_INVALID;
+        t->answer_authenticated = false;
 
-                r = dns_transaction_fix_rcode(t);
-                if (r < 0)
-                        goto fail;
+        r = dns_transaction_fix_rcode(t);
+        if (r < 0)
+                goto fail;
 
-                /* Block GC while starting requests for additional DNSSEC RRs */
-                t->block_gc++;
-                r = dns_transaction_request_dnssec_keys(t);
-                t->block_gc--;
+        /* Block GC while starting requests for additional DNSSEC RRs */
+        t->block_gc++;
+        r = dns_transaction_request_dnssec_keys(t);
+        t->block_gc--;
 
-                /* Maybe the transaction is ready for GC'ing now? If so, free it and return. */
-                if (!dns_transaction_gc(t))
-                        return;
+        /* Maybe the transaction is ready for GC'ing now? If so, free it and return. */
+        if (!dns_transaction_gc(t))
+                return;
 
-                /* Requesting additional keys might have resulted in
-                 * this transaction to fail, since the auxiliary
-                 * request failed for some reason. If so, we are not
-                 * in pending state anymore, and we should exit
-                 * quickly. */
-                if (t->state != DNS_TRANSACTION_PENDING)
-                        return;
-                if (r < 0)
-                        goto fail;
-                if (r > 0) {
-                        /* There are DNSSEC transactions pending now. Update the state accordingly. */
-                        t->state = DNS_TRANSACTION_VALIDATING;
-                        dns_transaction_close_connection(t);
-                        dns_transaction_stop_timeout(t);
-                        return;
-                }
-                break;
-
-        case DNS_PROTOCOL_MDNS:
-                log_debug("Installing answer for mDNS");
-                /* Install the answer as answer to the transaction */
-                dns_answer_unref(t->answer);
-                t->answer = dns_answer_ref(p->answer);
-                t->answer_rcode = DNS_PACKET_RCODE(p);
-                t->answer_dnssec_result = _DNSSEC_RESULT_INVALID;
-                t->answer_authenticated = false;
-
-                r = dns_transaction_fix_rcode(t);
-                if (r < 0)
-                        goto fail;
-
-                /* Maybe the transaction is ready for GC'ing now? If so, free it and return. */
-                if (!dns_transaction_gc(t))
-                        return;
-                break;
-
-        default:
-                assert_not_reached("Invalid DNS protocol.");
+        /* Requesting additional keys might have resulted in
+         * this transaction to fail, since the auxiliary
+         * request failed for some reason. If so, we are not
+         * in pending state anymore, and we should exit
+         * quickly. */
+        if (t->state != DNS_TRANSACTION_PENDING)
+                return;
+        if (r < 0)
+                goto fail;
+        if (r > 0) {
+                /* There are DNSSEC transactions pending now. Update the state accordingly. */
+                t->state = DNS_TRANSACTION_VALIDATING;
+                dns_transaction_close_connection(t);
+                dns_transaction_stop_timeout(t);
+                return;
         }
 
         dns_transaction_process_dnssec(t);
-        log_debug("* dns_transaction_process_reply() Exit");
         return;
 
 fail:
@@ -2919,7 +2888,6 @@ int dns_transaction_validate_dnssec(DnsTransaction *t) {
         char key_str[DNS_RESOURCE_KEY_STRING_MAX];
 
         assert(t);
-        log_debug(" * dns_transaction_validate_dnssec() Enter");
 
         /* We have now collected all DS and DNSKEY RRs in
          * t->validated_keys, let's see which RRs we can now
