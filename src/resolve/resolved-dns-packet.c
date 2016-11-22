@@ -2107,6 +2107,7 @@ int dns_packet_extract(DnsPacket *p) {
         dns_packet_rewind(p, DNS_PACKET_HEADER_SIZE);
 
         n = DNS_PACKET_QDCOUNT(p);
+        log_debug(" * dns_packet_extract() QDCOUNT: %d", n);
         if (n > 0) {
                 question = dns_question_new(n);
                 if (!question)
