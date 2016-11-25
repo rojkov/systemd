@@ -40,6 +40,7 @@ int manager_mdns_start(Manager *m) {
 
         assert(m);
 
+        log_debug("*** check if MDNS is supported");
         if (m->mdns_support == RESOLVE_SUPPORT_NO)
                 return 0;
 

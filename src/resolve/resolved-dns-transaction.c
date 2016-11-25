@@ -1144,7 +1144,9 @@ static int dns_transaction_emit_udp(DnsTransaction *t) {
                                 return r;
                         }
 
+                        log_debug("* resolved-dns-transaction.c:1147");
                         (void) sd_event_source_set_description(t->dns_udp_event_source, "dns-transaction-udp");
+                        log_debug("* resolved-dns-transaction.c:1149");
                         t->dns_udp_fd = fd;
                 }
 
@@ -1233,6 +1235,7 @@ static int dns_transaction_prepare(DnsTransaction *t, usec_t ts) {
                 dns_transaction_complete(t, DNS_TRANSACTION_NETWORK_DOWN);
                 return 0;
         }
+        log_debug("Prepare transaction %d (attempts: %d)", t->id, t->n_attempts);
 
         if (t->n_attempts >= TRANSACTION_ATTEMPTS_MAX(t->scope->protocol)) {
                 dns_transaction_complete(t, DNS_TRANSACTION_ATTEMPTS_MAX_REACHED);
@@ -1422,7 +1425,9 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
                 if (r < 0)
                         return r;
 
-                (void) sd_event_source_set_description(t->timeout_event_source, "dns-transaction-timeout");
+                log_debug("* resolved-dns-transaction.c:1427 Before empty t->timeout_event_source");
+                (void) sd_event_source_set_description(other->timeout_event_source, "dns-transaction-timeout");
+                log_debug("* resolved-dns-transaction.c:1429");
 
                 other->state = DNS_TRANSACTION_PENDING;
                 other->next_attempt_after = ts;
@@ -1434,6 +1439,7 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
         }
 
         DNS_PACKET_HEADER(p)->qdcount = htobe16(qdcount);
+        DNS_PACKET_HEADER(p)->id = t->id;
 
         /* Append known answer section if we're asking for any shared record */
         if (add_known_answers) {
@@ -1537,7 +1543,9 @@ int dns_transaction_go(DnsTransaction *t) {
                 if (r < 0)
                         return r;
 
+                log_debug("* resolved-dns-transaction.c:1544");
                 (void) sd_event_source_set_description(t->timeout_event_source, "dns-transaction-timeout");
+                log_debug("* resolved-dns-transaction.c:1546");
 
                 t->n_attempts = 0;
                 t->next_attempt_after = ts;
@@ -1608,7 +1616,9 @@ int dns_transaction_go(DnsTransaction *t) {
         if (r < 0)
                 return r;
 
+        log_debug("* resolved-dns-transaction.c:1617");
         (void) sd_event_source_set_description(t->timeout_event_source, "dns-transaction-timeout");
+        log_debug("* resolved-dns-transaction.c:1619");
 
         t->state = DNS_TRANSACTION_PENDING;
         t->next_attempt_after = ts;

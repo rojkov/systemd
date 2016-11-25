@@ -317,7 +317,9 @@ static int manager_network_monitor_listen(Manager *m) {
         if (r < 0)
                 return r;
 
+        log_debug("* resolved-manager.c:320");
         (void) sd_event_source_set_description(m->network_event_source, "network-monitor");
+        log_debug("* resolved-manager.c:322");
 
         return 0;
 }
@@ -426,7 +428,9 @@ static int manager_watch_hostname(Manager *m) {
                         return log_error_errno(r, "Failed to add hostname event source: %m");
         }
 
+        log_debug("* resolved-manager.c:431");
         (void) sd_event_source_set_description(m->hostname_event_source, "hostname");
+        log_debug("* resolved-manager.c:433");
 
         r = determine_hostname(&m->llmnr_hostname, &m->mdns_hostname);
         if (r < 0) {
@@ -498,7 +502,7 @@ int manager_new(Manager **ret) {
         m->hostname_fd = -1;
 
         m->llmnr_support = RESOLVE_SUPPORT_YES;
-        m->mdns_support = RESOLVE_SUPPORT_YES;
+        m->mdns_support = RESOLVE_SUPPORT_NO;
         m->dnssec_mode = DEFAULT_DNSSEC_MODE;
         m->enable_cache = true;
         m->dns_stub_listener_mode = DNS_STUB_LISTENER_UDP;
@@ -621,6 +625,8 @@ Manager *manager_free(Manager *m) {
 
         dns_resource_key_unref(m->llmnr_host_ipv4_key);
         dns_resource_key_unref(m->llmnr_host_ipv6_key);
+        dns_resource_key_unref(m->mdns_host_ipv4_key);
+        dns_resource_key_unref(m->mdns_host_ipv6_key);
 
         sd_event_source_unref(m->hostname_event_source);
         safe_close(m->hostname_fd);
@@ -1007,6 +1013,8 @@ void manager_refresh_rrs(Manager *m) {
 
         m->llmnr_host_ipv4_key = dns_resource_key_unref(m->llmnr_host_ipv4_key);
         m->llmnr_host_ipv6_key = dns_resource_key_unref(m->llmnr_host_ipv6_key);
+        m->mdns_host_ipv4_key = dns_resource_key_unref(m->mdns_host_ipv4_key);
+        m->mdns_host_ipv6_key = dns_resource_key_unref(m->mdns_host_ipv6_key);
 
         HASHMAP_FOREACH(l, m->links, i) {
                 link_add_rrs(l, true);

@@ -295,6 +295,9 @@ static int link_update_mdns_support(Link *l) {
                 r = -EINVAL;
                 goto clear;
         }
+        log_debug("*** switch MDNS support on in manager");
+        if (l->mdns_support != RESOLVE_SUPPORT_NO)
+                l->manager->mdns_support = RESOLVE_SUPPORT_YES;
 
         return 0;
 
@@ -692,10 +695,26 @@ LinkAddress *link_address_free(LinkAddress *a) {
                         else if (a->family == AF_INET6 && a->link->llmnr_ipv6_scope)
                                 dns_zone_remove_rr(&a->link->llmnr_ipv6_scope->zone, a->llmnr_ptr_rr);
                 }
+
+                if (a->mdns_address_rr) {
+                        if (a->family == AF_INET && a->link->mdns_ipv4_scope)
+                                dns_zone_remove_rr(&a->link->mdns_ipv4_scope->zone, a->mdns_address_rr);
+                        else if (a->family == AF_INET6 && a->link->mdns_ipv6_scope)
+                                dns_zone_remove_rr(&a->link->mdns_ipv6_scope->zone, a->mdns_address_rr);
+                }
+
+                if (a->mdns_ptr_rr) {
+                        if (a->family == AF_INET && a->link->mdns_ipv4_scope)
+                                dns_zone_remove_rr(&a->link->mdns_ipv4_scope->zone, a->mdns_ptr_rr);
+                        else if (a->family == AF_INET6 && a->link->mdns_ipv6_scope)
+                                dns_zone_remove_rr(&a->link->mdns_ipv6_scope->zone, a->mdns_ptr_rr);
+                }
         }
 
         dns_resource_record_unref(a->llmnr_address_rr);
         dns_resource_record_unref(a->llmnr_ptr_rr);
+        dns_resource_record_unref(a->mdns_address_rr);
+        dns_resource_record_unref(a->mdns_ptr_rr);
 
         return mfree(a);
 }
@@ -746,7 +765,7 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
 
                         r = dns_zone_put(&a->link->llmnr_ipv4_scope->zone, a->link->llmnr_ipv4_scope, a->llmnr_ptr_rr, false);
                         if (r < 0)
-                                log_warning_errno(r, "Failed to add IPv6 PTR record to LLMNR zone: %m");
+                                log_warning_errno(r, "Failed to add IPv4 PTR record to LLMNR zone: %m");
                 } else {
                         if (a->llmnr_address_rr) {
                                 if (a->link->llmnr_ipv4_scope)
@@ -758,6 +777,61 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                                 if (a->link->llmnr_ipv4_scope)
                                         dns_zone_remove_rr(&a->link->llmnr_ipv4_scope->zone, a->llmnr_ptr_rr);
                                 a->llmnr_ptr_rr = dns_resource_record_unref(a->llmnr_ptr_rr);
+                        }
+                }
+
+                if (!force_remove &&
+                    link_address_relevant(a, true) &&
+                    a->link->mdns_ipv4_scope &&
+                    a->link->mdns_support == RESOLVE_SUPPORT_YES &&
+                    a->link->manager->mdns_support == RESOLVE_SUPPORT_YES) {
+                        log_debug("*** resolved-link.c:788 ADD MDNS RRs to mDNS zone");
+
+                        if (!a->link->manager->mdns_host_ipv4_key) {
+                                a->link->manager->mdns_host_ipv4_key = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_A, a->link->manager->mdns_hostname);
+                                if (!a->link->manager->mdns_host_ipv4_key) {
+                                        r = -ENOMEM;
+                                        goto fail;
+                                }
+                        }
+
+                        if (!a->mdns_address_rr) {
+                                a->mdns_address_rr = dns_resource_record_new(a->link->manager->mdns_host_ipv4_key);
+                                if (!a->mdns_address_rr) {
+                                        r = -ENOMEM;
+                                        goto fail;
+                                }
+
+                                a->mdns_address_rr->a.in_addr = a->in_addr.in;
+                                a->mdns_address_rr->ttl = MDNS_DEFAULT_TTL;
+                        }
+
+                        if (!a->mdns_ptr_rr) {
+                                r = dns_resource_record_new_reverse(&a->mdns_ptr_rr, a->family, &a->in_addr, a->link->manager->mdns_hostname);
+                                if (r < 0)
+                                        goto fail;
+
+                                a->mdns_ptr_rr->ttl = MDNS_DEFAULT_TTL;
+                        }
+
+                        r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, a->mdns_address_rr, true);
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to add A record to MDNS zone: %m");
+
+                        r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, a->mdns_ptr_rr, false);
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
+                } else {
+                        if (a->mdns_address_rr) {
+                                if (a->link->mdns_ipv4_scope)
+                                        dns_zone_remove_rr(&a->link->mdns_ipv4_scope->zone, a->mdns_address_rr);
+                                a->mdns_address_rr = dns_resource_record_unref(a->mdns_address_rr);
+                        }
+
+                        if (a->mdns_ptr_rr) {
+                                if (a->link->mdns_ipv4_scope)
+                                        dns_zone_remove_rr(&a->link->mdns_ipv4_scope->zone, a->mdns_ptr_rr);
+                                a->mdns_ptr_rr = dns_resource_record_unref(a->mdns_ptr_rr);
                         }
                 }
         }
@@ -815,6 +889,60 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                                 if (a->link->llmnr_ipv6_scope)
                                         dns_zone_remove_rr(&a->link->llmnr_ipv6_scope->zone, a->llmnr_ptr_rr);
                                 a->llmnr_ptr_rr = dns_resource_record_unref(a->llmnr_ptr_rr);
+                        }
+                }
+
+                if (!force_remove &&
+                    link_address_relevant(a, true) &&
+                    a->link->mdns_ipv6_scope &&
+                    a->link->mdns_support == RESOLVE_SUPPORT_YES &&
+                    a->link->manager->mdns_support == RESOLVE_SUPPORT_YES) {
+
+                        if (!a->link->manager->mdns_host_ipv6_key) {
+                                a->link->manager->mdns_host_ipv6_key = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_AAAA, a->link->manager->mdns_hostname);
+                                if (!a->link->manager->mdns_host_ipv6_key) {
+                                        r = -ENOMEM;
+                                        goto fail;
+                                }
+                        }
+
+                        if (!a->mdns_address_rr) {
+                                a->mdns_address_rr = dns_resource_record_new(a->link->manager->mdns_host_ipv6_key);
+                                if (!a->mdns_address_rr) {
+                                        r = -ENOMEM;
+                                        goto fail;
+                                }
+
+                                a->mdns_address_rr->aaaa.in6_addr = a->in_addr.in6;
+                                a->mdns_address_rr->ttl = MDNS_DEFAULT_TTL;
+                        }
+
+                        if (!a->mdns_ptr_rr) {
+                                r = dns_resource_record_new_reverse(&a->mdns_ptr_rr, a->family, &a->in_addr, a->link->manager->llmnr_hostname);
+                                if (r < 0)
+                                        goto fail;
+
+                                a->mdns_ptr_rr->ttl = MDNS_DEFAULT_TTL;
+                        }
+
+                        r = dns_zone_put(&a->link->mdns_ipv6_scope->zone, a->link->mdns_ipv6_scope, a->mdns_address_rr, true);
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to add AAAA record to MDNS zone: %m");
+
+                        r = dns_zone_put(&a->link->mdns_ipv6_scope->zone, a->link->mdns_ipv6_scope, a->mdns_ptr_rr, false);
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv6 PTR record to MDNS zone: %m");
+                } else {
+                        if (a->mdns_address_rr) {
+                                if (a->link->mdns_ipv6_scope)
+                                        dns_zone_remove_rr(&a->link->mdns_ipv6_scope->zone, a->mdns_address_rr);
+                                a->mdns_address_rr = dns_resource_record_unref(a->mdns_address_rr);
+                        }
+
+                        if (a->mdns_ptr_rr) {
+                                if (a->link->mdns_ipv6_scope)
+                                        dns_zone_remove_rr(&a->link->mdns_ipv6_scope->zone, a->mdns_ptr_rr);
+                                a->mdns_ptr_rr = dns_resource_record_unref(a->mdns_ptr_rr);
                         }
                 }
         }

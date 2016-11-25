@@ -550,7 +550,7 @@ static int dns_scope_multicast_membership(DnsScope *s, bool b, struct in_addr in
                         .imr_ifindex = s->link->ifindex,
                 };
 
-                fd = manager_llmnr_ipv4_udp_fd(s->manager);
+                fd = s->protocol == DNS_PROTOCOL_LLMNR ? manager_llmnr_ipv4_udp_fd(s->manager) : manager_mdns_ipv4_fd(s->manager);
                 if (fd < 0)
                         return fd;
 
@@ -569,7 +569,7 @@ static int dns_scope_multicast_membership(DnsScope *s, bool b, struct in_addr in
                         .ipv6mr_interface = s->link->ifindex,
                 };
 
-                fd = manager_llmnr_ipv6_udp_fd(s->manager);
+                fd = s->protocol == DNS_PROTOCOL_LLMNR ? manager_llmnr_ipv6_udp_fd(s->manager) : manager_mdns_ipv6_fd(s->manager);
                 if (fd < 0)
                         return fd;
 
@@ -684,10 +684,10 @@ void dns_scope_process_query(DnsScope *s, DnsStream *stream, DnsPacket *p) {
         assert(s);
         assert(p);
 
-        if (p->protocol != DNS_PROTOCOL_LLMNR)
+        if (p->protocol != DNS_PROTOCOL_LLMNR && p->protocol != DNS_PROTOCOL_MDNS)
                 return;
 
-        if (p->ipproto == IPPROTO_UDP) {
+        if (p->ipproto == IPPROTO_UDP && p->protocol == DNS_PROTOCOL_LLMNR) {
                 /* Don't accept UDP queries directed to anything but
                  * the LLMNR multicast addresses. See RFC 4795,
                  * section 2.5. */
@@ -705,13 +705,13 @@ void dns_scope_process_query(DnsScope *s, DnsStream *stream, DnsPacket *p) {
                 return;
         }
 
-        if (DNS_PACKET_LLMNR_C(p)) {
+        if (p->protocol == DNS_PROTOCOL_LLMNR && DNS_PACKET_LLMNR_C(p)) {
                 /* Somebody notified us about a possible conflict */
                 dns_scope_verify_conflicts(s, p);
                 return;
         }
 
-        assert(dns_question_size(p->question) == 1);
+        assert((p->protocol == DNS_PROTOCOL_MDNS) || (dns_question_size(p->question) == 1));
         key = p->question->keys[0];
 
         r = dns_zone_lookup(&s->zone, key, 0, &answer, &soa, &tentative);
@@ -722,7 +722,7 @@ void dns_scope_process_query(DnsScope *s, DnsStream *stream, DnsPacket *p) {
         if (r == 0)
                 return;
 
-        if (answer)
+        if (answer && p->protocol == DNS_PROTOCOL_LLMNR)
                 dns_answer_order_by_scope(answer, in_addr_is_link_local(p->family, &p->sender) > 0);
 
         r = dns_scope_make_reply_packet(s, DNS_PACKET_ID(p), DNS_RCODE_SUCCESS, p->question, answer, soa, tentative, &reply);
@@ -744,30 +744,34 @@ void dns_scope_process_query(DnsScope *s, DnsStream *stream, DnsPacket *p) {
                 if (DNS_STREAM_QUEUED(stream))
                         dns_stream_ref(stream);
         } else {
-                int fd;
-
                 if (!ratelimit_test(&s->ratelimit))
                         return;
-
-                if (p->family == AF_INET)
-                        fd = manager_llmnr_ipv4_udp_fd(s->manager);
-                else if (p->family == AF_INET6)
-                        fd = manager_llmnr_ipv6_udp_fd(s->manager);
-                else {
-                        log_debug("Unknown protocol");
-                        return;
-                }
-                if (fd < 0) {
-                        log_debug_errno(fd, "Failed to get reply socket: %m");
-                        return;
-                }
 
                 /* Note that we always immediately reply to all LLMNR
                  * requests, and do not wait any time, since we
                  * verified uniqueness for all records. Also see RFC
                  * 4795, Section 2.7 */
 
-                r = manager_send(s->manager, fd, p->ifindex, p->family, &p->sender, p->sender_port, NULL, reply);
+                if (p->protocol == DNS_PROTOCOL_LLMNR) {
+                        int fd;
+
+                        if (p->family == AF_INET)
+                                fd = manager_llmnr_ipv4_udp_fd(s->manager);
+                        else if (p->family == AF_INET6)
+                                fd = manager_llmnr_ipv6_udp_fd(s->manager);
+                        else {
+                                log_debug("Unknown protocol");
+                                return;
+                        }
+                        if (fd < 0) {
+                                log_debug_errno(fd, "Failed to get reply socket: %m");
+                                return;
+                        }
+
+                        r = manager_send(s->manager, fd, p->ifindex, p->family, &p->sender, p->sender_port, NULL, reply);
+                } else if (p->protocol == DNS_PROTOCOL_MDNS) {
+                        r = dns_scope_emit_udp(s, -1, reply);
+                }
                 if (r < 0) {
                         log_debug_errno(r, "Failed to send reply packet: %m");
                         return;
@@ -917,7 +921,9 @@ int dns_scope_notify_conflict(DnsScope *scope, DnsResourceRecord *rr) {
         if (r < 0)
                 return log_debug_errno(r, "Failed to add conflict dispatch event: %m");
 
+        log_debug("* resolved-dns-scope.c:920");
         (void) sd_event_source_set_description(scope->conflict_event_source, "scope-conflict");
+        log_debug("* resolved-dns-scope.c:922");
 
         return 0;
 }

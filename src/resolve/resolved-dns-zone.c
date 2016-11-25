@@ -392,6 +392,7 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
                         if (k < 0)
                                 return k;
                         if (k > 0) {
+                                /* j->rr->key->class |= MDNS_RR_CACHE_FLUSH; */
                                 r = dns_answer_add(answer, j->rr, ifindex, DNS_ANSWER_AUTHENTICATED);
                                 if (r < 0)
                                         return r;

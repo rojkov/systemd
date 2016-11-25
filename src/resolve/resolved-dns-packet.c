@@ -572,6 +572,7 @@ fail:
 int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, size_t *start) {
         size_t saved_size;
         int r;
+        uint16_t class;
 
         assert(p);
         assert(k);
@@ -586,7 +587,8 @@ int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, size_t *start) 
         if (r < 0)
                 goto fail;
 
-        r = dns_packet_append_uint16(p, k->class, NULL);
+        class = p->protocol == DNS_PROTOCOL_MDNS ? k->class | MDNS_RR_CACHE_FLUSH  : k->class;
+        r = dns_packet_append_uint16(p, class, NULL);
         if (r < 0)
                 goto fail;
 
@@ -1158,6 +1160,7 @@ int dns_packet_append_answer(DnsPacket *p, DnsAnswer *a) {
         assert(p);
 
         DNS_ANSWER_FOREACH(rr, a) {
+                log_debug("Adding %s to answer", dns_resource_key_name(rr->key));
                 r = dns_packet_append_rr(p, rr, NULL, NULL);
                 if (r < 0)
                         return r;

@@ -394,7 +394,9 @@ static int manager_dns_stub_udp_fd(Manager *m) {
         if (r < 0)
                 return r;
 
+        log_debug("* resolved-dns-stub.c:397");
         (void) sd_event_source_set_description(m->dns_stub_udp_event_source, "dns-stub-udp");
+        log_debug("* resolved-dns-stub.c:399");
         m->dns_stub_udp_fd = fd;
         fd = -1;
 
@@ -489,7 +491,9 @@ static int manager_dns_stub_tcp_fd(Manager *m) {
         if (r < 0)
                 return r;
 
+        log_debug("* resolved-dns-stub.c:494");
         (void) sd_event_source_set_description(m->dns_stub_tcp_event_source, "dns-stub-tcp");
+        log_debug("* resolved-dns-stub.c:496");
         m->dns_stub_tcp_fd = fd;
         fd = -1;
 

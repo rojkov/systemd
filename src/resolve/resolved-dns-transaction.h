@@ -178,4 +178,4 @@ DnsTransactionSource dns_transaction_source_from_string(const char *s) _pure_;
 /* Maximum attempts to send LLMNR requests, see RFC 4795 Section 2.7 */
 #define LLMNR_TRANSACTION_ATTEMPTS_MAX 3
 
-#define TRANSACTION_ATTEMPTS_MAX(p) ((p) == DNS_PROTOCOL_LLMNR ? LLMNR_TRANSACTION_ATTEMPTS_MAX : DNS_TRANSACTION_ATTEMPTS_MAX)
+#define TRANSACTION_ATTEMPTS_MAX(p) (((p) == DNS_PROTOCOL_LLMNR || (p) == DNS_PROTOCOL_MDNS) ? LLMNR_TRANSACTION_ATTEMPTS_MAX : DNS_TRANSACTION_ATTEMPTS_MAX)
