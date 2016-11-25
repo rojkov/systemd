@@ -256,6 +256,8 @@ static int dns_scope_emit_one(DnsScope *s, int fd, DnsPacket *p) {
                 if (fd < 0)
                         return fd;
 
+                log_debug("Sending mDNS packet with %d questions and %d answers",
+                          DNS_PACKET_QDCOUNT(p), DNS_PACKET_ANCOUNT(p));
                 r = manager_send(s->manager, fd, ifindex, family, &addr, MDNS_PORT, NULL, p);
                 if (r < 0)
                         return r;
@@ -639,10 +641,12 @@ static int dns_scope_make_reply_packet(
                                                               0 /* (cd) */,
                                                               rcode));
 
-        r = dns_packet_append_question(p, q);
-        if (r < 0)
-                return r;
-        DNS_PACKET_HEADER(p)->qdcount = htobe16(dns_question_size(q));
+        if (s->protocol != DNS_PROTOCOL_MDNS) {
+                r = dns_packet_append_question(p, q);
+                if (r < 0)
+                        return r;
+                DNS_PACKET_HEADER(p)->qdcount = htobe16(dns_question_size(q));
+        }
 
         r = dns_packet_append_answer(p, answer);
         if (r < 0)
@@ -835,7 +839,7 @@ static int dns_scope_make_conflict_packet(
         DNS_PACKET_HEADER(p)->qdcount = htobe16(1);
         DNS_PACKET_HEADER(p)->arcount = htobe16(1);
 
-        r = dns_packet_append_key(p, rr->key, NULL);
+        r = dns_packet_append_key(p, rr->key, false, NULL);
         if (r < 0)
                 return r;
 
