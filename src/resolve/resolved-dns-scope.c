@@ -839,7 +839,7 @@ static int dns_scope_make_conflict_packet(
         DNS_PACKET_HEADER(p)->qdcount = htobe16(1);
         DNS_PACKET_HEADER(p)->arcount = htobe16(1);
 
-        r = dns_packet_append_key(p, rr->key, false, NULL);
+        r = dns_packet_append_key(p, rr->key, NULL);
         if (r < 0)
                 return r;
 

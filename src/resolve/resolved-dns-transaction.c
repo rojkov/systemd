@@ -1366,7 +1366,7 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
         if (r < 0)
                 return r;
 
-        r = dns_packet_append_key(p, t->key, false, NULL);
+        r = dns_packet_append_key(p, t->key, NULL);
         if (r < 0)
                 return r;
 
@@ -1398,7 +1398,7 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
                 if (qdcount >= UINT16_MAX)
                         break;
 
-                r = dns_packet_append_key(p, other->key, false, NULL);
+                r = dns_packet_append_key(p, other->key, NULL);
 
                 /*
                  * If we can't stuff more questions into the packet, just give up.
@@ -1470,7 +1470,7 @@ static int dns_transaction_make_packet(DnsTransaction *t) {
         if (r < 0)
                 return r;
 
-        r = dns_packet_append_key(p, t->key, false, NULL);
+        r = dns_packet_append_key(p, t->key, NULL);
         if (r < 0)
                 return r;
 

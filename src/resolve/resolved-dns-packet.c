@@ -569,10 +569,9 @@ fail:
         return r;
 }
 
-int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, const bool cache_flush, size_t *start) {
+int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, size_t *start) {
         size_t saved_size;
         int r;
-        uint16_t class;
 
         assert(p);
         assert(k);
@@ -587,8 +586,7 @@ int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, const bool cach
         if (r < 0)
                 goto fail;
 
-        class = cache_flush ? k->class | MDNS_RR_CACHE_FLUSH  : k->class;
-        r = dns_packet_append_uint16(p, class, NULL);
+        r = dns_packet_append_uint16(p, k->class, NULL);
         if (r < 0)
                 goto fail;
 
@@ -803,7 +801,7 @@ int dns_packet_append_rr(DnsPacket *p, const DnsResourceRecord *rr, size_t *star
 
         saved_size = p->size;
 
-        r = dns_packet_append_key(p, rr->key, (p->protocol == DNS_PROTOCOL_MDNS), NULL);
+        r = dns_packet_append_key(p, rr->key, NULL);
         if (r < 0)
                 goto fail;
 
@@ -1145,7 +1143,7 @@ int dns_packet_append_question(DnsPacket *p, DnsQuestion *q) {
         assert(p);
 
         DNS_QUESTION_FOREACH(key, q) {
-                r = dns_packet_append_key(p, key, false, NULL);
+                r = dns_packet_append_key(p, key, NULL);
                 if (r < 0)
                         return r;
         }
