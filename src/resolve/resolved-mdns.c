@@ -86,7 +86,7 @@ static int on_mdns_packet(sd_event_source *s, int fd, uint32_t revents, void *us
         if (dns_packet_validate_reply(p) > 0) {
                 DnsResourceRecord *rr;
 
-                log_debug("Got mDNS reply packet with %d questions", DNS_PACKET_QDCOUNT(p));
+                log_debug("Got mDNS reply packet");
 
                 /*
                  * mDNS is different from regular DNS and LLMNR with regard to handling responses.
