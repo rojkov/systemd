@@ -295,9 +295,6 @@ static int link_update_mdns_support(Link *l) {
                 r = -EINVAL;
                 goto clear;
         }
-        log_debug("*** switch MDNS support on in manager");
-        if (l->mdns_support != RESOLVE_SUPPORT_NO)
-                l->manager->mdns_support = RESOLVE_SUPPORT_YES;
 
         return 0;
 
