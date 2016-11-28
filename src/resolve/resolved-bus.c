@@ -1657,9 +1657,7 @@ int manager_connect_bus(Manager *m) {
                 if (r < 0)
                         return log_error_errno(r, "Failed to install bus reconnect time event: %m");
 
-                log_debug("* resolved-bus.c:1660");
                 (void) sd_event_source_set_description(m->bus_retry_event_source, "bus-retry");
-                log_debug("* resolved-bus.c:1660");
                 return 0;
         }
 

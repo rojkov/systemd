@@ -770,9 +770,7 @@ int dns_query_go(DnsQuery *q) {
         if (r < 0)
                 goto fail;
 
-        log_debug("* resolved-dns-query.c:773");
         (void) sd_event_source_set_description(q->timeout_event_source, "query-timeout");
-        log_debug("* resolved-dns-query.c:775");
 
         q->state = DNS_TRANSACTION_PENDING;
         q->block_ready++;

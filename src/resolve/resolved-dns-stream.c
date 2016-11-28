@@ -380,9 +380,7 @@ int dns_stream_new(Manager *m, DnsStream **ret, DnsProtocol protocol, int fd) {
         if (r < 0)
                 return r;
 
-        log_debug("* resolved-dns-stream.c:383");
         (void) sd_event_source_set_description(s->io_event_source, "dns-stream-io");
-        log_debug("* resolved-dns-stream.c:385");
 
         r = sd_event_add_time(
                         m->event,
@@ -393,9 +391,7 @@ int dns_stream_new(Manager *m, DnsStream **ret, DnsProtocol protocol, int fd) {
         if (r < 0)
                 return r;
 
-        log_debug("* resolved-dns-stream.c:396");
         (void) sd_event_source_set_description(s->timeout_event_source, "dns-stream-timeout");
-        log_debug("* resolved-dns-stream.c:398");
 
         LIST_PREPEND(streams, m->dns_streams, s);
         s->manager = m;
