@@ -782,8 +782,6 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                     a->link->mdns_ipv4_scope &&
                     a->link->mdns_support == RESOLVE_SUPPORT_YES &&
                     a->link->manager->mdns_support == RESOLVE_SUPPORT_YES) {
-                        log_debug("*** resolved-link.c:788 ADD MDNS RRs to mDNS zone");
-
                         if (!a->link->manager->mdns_host_ipv4_key) {
                                 a->link->manager->mdns_host_ipv4_key = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_A, a->link->manager->mdns_hostname);
                                 if (!a->link->manager->mdns_host_ipv4_key) {
