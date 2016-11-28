@@ -641,6 +641,10 @@ static int dns_scope_make_reply_packet(
                                                               0 /* (cd) */,
                                                               rcode));
 
+        /* The p.6 of RFC6762 states "Multicast DNS responses MUST NOT
+         * contain any questions in the Question Section.  Any questions
+         * in the Question Section of a received Multicast DNS response
+         * MUST be silently ignored." */
         if (s->protocol != DNS_PROTOCOL_MDNS) {
                 r = dns_packet_append_question(p, q);
                 if (r < 0)
