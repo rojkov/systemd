@@ -699,7 +699,6 @@ int dns_query_go(DnsQuery *q) {
                 const char *name;
 
                 name = dns_question_first_name(dns_query_question_for_protocol(q, s->protocol));
-                log_debug(" resolved-dns-query.c:695: Some name - %s", name);
                 if (!name)
                         continue;
 
@@ -743,7 +742,6 @@ int dns_query_go(DnsQuery *q) {
                 const char *name;
 
                 name = dns_question_first_name(dns_query_question_for_protocol(q, s->protocol));
-                log_debug("resolved-dns-query.c:739: again some name - %s", name);
                 if (!name)
                         continue;
 

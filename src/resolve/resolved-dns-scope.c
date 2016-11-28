@@ -719,6 +719,7 @@ void dns_scope_process_query(DnsScope *s, DnsStream *stream, DnsPacket *p) {
                 return;
         }
 
+        /* TODO: there might be more than one question in mDNS queries. */
         assert((p->protocol == DNS_PROTOCOL_MDNS) || (dns_question_size(p->question) == 1));
         key = p->question->keys[0];
 
