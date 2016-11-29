@@ -571,6 +571,7 @@ fail:
 
 int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, const DnsAnswerFlags flags, size_t *start) {
         size_t saved_size;
+        uint16_t class;
         int r;
 
         assert(p);
@@ -586,7 +587,8 @@ int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, const DnsAnswer
         if (r < 0)
                 goto fail;
 
-        r = dns_packet_append_uint16(p, k->class, NULL);
+        class = flags & DNS_ANSWER_CACHE_FLUSH ? k->class | MDNS_RR_CACHE_FLUSH  : k->class;
+        r = dns_packet_append_uint16(p, class, NULL);
         if (r < 0)
                 goto fail;
 

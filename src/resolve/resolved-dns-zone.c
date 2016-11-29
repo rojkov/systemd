@@ -52,12 +52,12 @@ void dns_zone_item_probe_stop(DnsZoneItem *i) {
 
                 answer = dns_answer_new(4);
                 LIST_FOREACH(addresses, a, i->scope->link->addresses) {
-                        r = dns_answer_add(answer, a->mdns_address_rr, 0, 0);
+                        r = dns_answer_add(answer, a->mdns_address_rr, 0, DNS_ANSWER_CACHE_FLUSH);
                         if (r < 0) {
                                 log_debug_errno(r, "Failed to add address RR to answer: %m");
                                 return;
                         }
-                        r = dns_answer_add(answer, a->mdns_ptr_rr, 0, 0);
+                        r = dns_answer_add(answer, a->mdns_ptr_rr, 0, DNS_ANSWER_CACHE_FLUSH);
                         if (r < 0) {
                                 log_debug_errno(r, "Failed to add PTR RR to answer: %m");
                                 return;
