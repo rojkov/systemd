@@ -1237,6 +1237,7 @@ static int dns_transaction_prepare(DnsTransaction *t, usec_t ts) {
 
         if (t->n_attempts >= TRANSACTION_ATTEMPTS_MAX(t->scope->protocol)) {
                 dns_transaction_complete(t, DNS_TRANSACTION_ATTEMPTS_MAX_REACHED);
+                /* If mDNS then start anouncing here */
                 return 0;
         }
 

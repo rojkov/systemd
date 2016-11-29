@@ -168,6 +168,7 @@ void link_allocate_scopes(Link *l) {
 void link_add_rrs(Link *l, bool force_remove) {
         LinkAddress *a;
 
+        printf(" link_add_rrs(%p, %d)\n", l, force_remove);
         LIST_FOREACH(addresses, a, l->addresses)
                 link_address_add_rrs(a, force_remove);
 }
@@ -913,7 +914,7 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         }
 
                         if (!a->mdns_ptr_rr) {
-                                r = dns_resource_record_new_reverse(&a->mdns_ptr_rr, a->family, &a->in_addr, a->link->manager->llmnr_hostname);
+                                r = dns_resource_record_new_reverse(&a->mdns_ptr_rr, a->family, &a->in_addr, a->link->manager->mdns_hostname);
                                 if (r < 0)
                                         goto fail;
 
@@ -1233,4 +1234,41 @@ void link_remove_user(Link *l) {
         assert(l->state_file);
 
         (void) unlink(l->state_file);
+}
+
+bool link_probing_mdns(Link *l) {
+        DnsTransaction *t;
+        DnsZoneItem *i;
+        bool is_probing = false;
+
+        assert(l);
+
+        /*  Check if there're ongoing probing transactions. */
+
+        LIST_FOREACH(transactions_by_scope, t, l->mdns_ipv4_scope->transactions) {
+                SET_FOREACH_MOVE(i, t->notify_zone_items_done,
+                                    t->notify_zone_items) {
+                        if (i->probe_transaction) {
+                                log_debug("Transaction %d is still probing", t->id);
+                                is_probing = true;
+                        }
+                }
+                SWAP_TWO(t->notify_zone_items, t->notify_zone_items_done);
+        }
+
+        if (is_probing)
+                return true;
+
+        LIST_FOREACH(transactions_by_scope, t, l->mdns_ipv6_scope->transactions) {
+                SET_FOREACH_MOVE(i, t->notify_zone_items_done,
+                                    t->notify_zone_items) {
+                        if (i->probe_transaction) {
+                                log_debug("Transaction %d is still probing", t->id);
+                                is_probing = true;
+                        }
+                }
+                SWAP_TWO(t->notify_zone_items, t->notify_zone_items_done);
+        }
+
+        return is_probing;
 }

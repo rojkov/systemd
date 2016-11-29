@@ -77,6 +77,11 @@ static int on_mdns_packet(sd_event_source *s, int fd, uint32_t revents, void *us
         if (r <= 0)
                 return r;
 
+        if (manager_our_packet(m, p)) {
+                log_debug("Got our own mDNS UDP packet. Ignoring.");
+                return 0;
+        }
+
         scope = manager_find_scope(m, p);
         if (!scope) {
                 log_warning("Got mDNS UDP packet on unknown scope. Ignoring.");

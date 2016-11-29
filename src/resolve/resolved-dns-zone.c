@@ -28,7 +28,7 @@
 #define ZONE_MAX 1024
 
 void dns_zone_item_probe_stop(DnsZoneItem *i) {
-        DnsTransaction *t;
+        DnsTransaction *t, *other;
         assert(i);
 
         if (!i->probe_transaction)
@@ -39,6 +39,70 @@ void dns_zone_item_probe_stop(DnsZoneItem *i) {
 
         set_remove(t->notify_zone_items, i);
         set_remove(t->notify_zone_items_done, i);
+
+        if (i->scope->protocol == DNS_PROTOCOL_MDNS &&
+            !link_probing_mdns(i->scope->link) &&
+            t->state == DNS_TRANSACTION_ATTEMPTS_MAX_REACHED) {
+                log_debug("DONE with MDNS probing");
+
+                _cleanup_(dns_answer_unrefp) DnsAnswer *answer_a = NULL, *answer_aaaa = NULL, *soa = NULL, *answer = NULL;
+                _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
+                bool tentative;
+                int r;
+
+                r = dns_zone_lookup(&i->scope->link->mdns_ipv4_scope->zone, i->scope->link->manager->mdns_host_ipv4_key, 0, &answer_a, &soa, &tentative);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to lookup key: %m");
+                        return;
+                }
+
+                r = dns_zone_lookup(&i->scope->link->mdns_ipv6_scope->zone, i->scope->link->manager->mdns_host_ipv6_key, 0, &answer_aaaa, &soa, &tentative);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to lookup key: %m");
+                        return;
+                }
+
+                r = dns_answer_merge(answer_a, answer_aaaa, &answer);
+                if (r < 0) {
+                        log_debug("Can't merge answers");
+                        return;
+                }
+
+                if (dns_answer_isempty(answer)) {
+                        log_debug("Nothing to announce for mDNS.");
+                        return;
+                }
+
+                r = dns_packet_new(&p, DNS_PROTOCOL_MDNS, 0);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to create a packet: %m");
+                        return;
+                }
+                DNS_PACKET_HEADER(p)->flags = htobe16(DNS_PACKET_MAKE_FLAGS(
+                                                                      1 /* qr */,
+                                                                      0 /* opcode */,
+                                                                      0 /* c */,
+                                                                      0 /* tc */,
+                                                                      0,
+                                                                      0 /* (ra) */,
+                                                                      0 /* (ad) */,
+                                                                      0 /* (cd) */,
+                                                                      DNS_RCODE_SUCCESS));
+                r = dns_packet_append_answer(p, answer);
+                if (r < 0) {
+                        log_debug("Can't append answer to packet");
+                        return;
+                }
+                DNS_PACKET_HEADER(p)->ancount = htobe16(dns_answer_size(answer));
+                r = dns_scope_emit_udp(i->scope, -1, p);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to send reply packet: %m");
+                        return;
+                }
+        } else {
+                log_debug("STILL probing (%s)", dns_transaction_state_to_string(t->state));
+        }
+
         dns_transaction_gc(t);
 }
 
