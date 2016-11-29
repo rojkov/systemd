@@ -569,7 +569,7 @@ fail:
         return r;
 }
 
-int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, size_t *start) {
+int dns_packet_append_key(DnsPacket *p, const DnsResourceKey *k, const DnsAnswerFlags flags, size_t *start) {
         size_t saved_size;
         int r;
 
@@ -791,7 +791,7 @@ int dns_packet_truncate_opt(DnsPacket *p) {
         return 1;
 }
 
-int dns_packet_append_rr(DnsPacket *p, const DnsResourceRecord *rr, size_t *start, size_t *rdata_start) {
+int dns_packet_append_rr(DnsPacket *p, const DnsResourceRecord *rr, const DnsAnswerFlags flags, size_t *start, size_t *rdata_start) {
 
         size_t saved_size, rdlength_offset, end, rdlength, rds;
         int r;
@@ -801,7 +801,7 @@ int dns_packet_append_rr(DnsPacket *p, const DnsResourceRecord *rr, size_t *star
 
         saved_size = p->size;
 
-        r = dns_packet_append_key(p, rr->key, NULL);
+        r = dns_packet_append_key(p, rr->key, flags, NULL);
         if (r < 0)
                 goto fail;
 
@@ -1143,7 +1143,7 @@ int dns_packet_append_question(DnsPacket *p, DnsQuestion *q) {
         assert(p);
 
         DNS_QUESTION_FOREACH(key, q) {
-                r = dns_packet_append_key(p, key, NULL);
+                r = dns_packet_append_key(p, key, 0, NULL);
                 if (r < 0)
                         return r;
         }
@@ -1153,13 +1153,14 @@ int dns_packet_append_question(DnsPacket *p, DnsQuestion *q) {
 
 int dns_packet_append_answer(DnsPacket *p, DnsAnswer *a) {
         DnsResourceRecord *rr;
+        DnsAnswerFlags flags;
         int r;
 
         assert(p);
 
-        DNS_ANSWER_FOREACH(rr, a) {
+        DNS_ANSWER_FOREACH_FLAGS(rr, flags, a) {
                 log_debug("Adding %s to answer", dns_resource_key_name(rr->key));
-                r = dns_packet_append_rr(p, rr, NULL, NULL);
+                r = dns_packet_append_rr(p, rr, flags, NULL, NULL);
                 if (r < 0)
                         return r;
         }

@@ -28,7 +28,7 @@
 #define ZONE_MAX 1024
 
 void dns_zone_item_probe_stop(DnsZoneItem *i) {
-        DnsTransaction *t, *other;
+        DnsTransaction *t;
         assert(i);
 
         if (!i->probe_transaction)
@@ -45,27 +45,23 @@ void dns_zone_item_probe_stop(DnsZoneItem *i) {
             t->state == DNS_TRANSACTION_ATTEMPTS_MAX_REACHED) {
                 log_debug("DONE with MDNS probing");
 
-                _cleanup_(dns_answer_unrefp) DnsAnswer *answer_a = NULL, *answer_aaaa = NULL, *soa = NULL, *answer = NULL;
+                _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
                 _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
-                bool tentative;
+                LinkAddress *a;
                 int r;
 
-                r = dns_zone_lookup(&i->scope->link->mdns_ipv4_scope->zone, i->scope->link->manager->mdns_host_ipv4_key, 0, &answer_a, &soa, &tentative);
-                if (r < 0) {
-                        log_debug_errno(r, "Failed to lookup key: %m");
-                        return;
-                }
-
-                r = dns_zone_lookup(&i->scope->link->mdns_ipv6_scope->zone, i->scope->link->manager->mdns_host_ipv6_key, 0, &answer_aaaa, &soa, &tentative);
-                if (r < 0) {
-                        log_debug_errno(r, "Failed to lookup key: %m");
-                        return;
-                }
-
-                r = dns_answer_merge(answer_a, answer_aaaa, &answer);
-                if (r < 0) {
-                        log_debug("Can't merge answers");
-                        return;
+                answer = dns_answer_new(4);
+                LIST_FOREACH(addresses, a, i->scope->link->addresses) {
+                        r = dns_answer_add(answer, a->mdns_address_rr, 0, 0);
+                        if (r < 0) {
+                                log_debug_errno(r, "Failed to add address RR to answer: %m");
+                                return;
+                        }
+                        r = dns_answer_add(answer, a->mdns_ptr_rr, 0, 0);
+                        if (r < 0) {
+                                log_debug_errno(r, "Failed to add PTR RR to answer: %m");
+                                return;
+                        }
                 }
 
                 if (dns_answer_isempty(answer)) {
