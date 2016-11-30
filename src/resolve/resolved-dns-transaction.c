@@ -365,7 +365,7 @@ void dns_transaction_complete(DnsTransaction *t, DnsTransactionState state) {
         }
         SWAP_TWO(t->notify_zone_items, t->notify_zone_items_done);
         if (t->probing) {
-                dns_scope_announce(t->scope);
+                dns_scope_announce(t->scope, false);
         }
 
         SET_FOREACH_MOVE(d, t->notify_transactions_done, t->notify_transactions)
