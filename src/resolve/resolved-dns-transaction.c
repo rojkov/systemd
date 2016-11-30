@@ -1213,7 +1213,10 @@ static usec_t transaction_get_resend_timeout(DnsTransaction *t) {
 
         case DNS_PROTOCOL_MDNS:
                 assert(t->n_attempts > 0);
-                return (1 << (t->n_attempts - 1)) * USEC_PER_SEC;
+                if (t->probing)
+                        return 250 * USEC_PER_MSEC;
+                else
+                        return (1 << (t->n_attempts - 1)) * USEC_PER_SEC;
 
         case DNS_PROTOCOL_LLMNR:
                 return t->scope->resend_timeout;
@@ -1527,7 +1530,6 @@ int dns_transaction_go(DnsTransaction *t) {
                         break;
 
                 case DNS_PROTOCOL_MDNS:
-                        /* TODO: When probing jitter is always 250ms */
                         jitter %= MDNS_JITTER_RANGE_USEC;
                         jitter += MDNS_JITTER_MIN_USEC;
                         accuracy = MDNS_JITTER_RANGE_USEC;
