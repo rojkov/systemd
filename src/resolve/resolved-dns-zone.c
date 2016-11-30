@@ -40,65 +40,6 @@ void dns_zone_item_probe_stop(DnsZoneItem *i) {
         set_remove(t->notify_zone_items, i);
         set_remove(t->notify_zone_items_done, i);
 
-        if (i->scope->protocol == DNS_PROTOCOL_MDNS &&
-            !link_probing_mdns(i->scope->link) &&
-            t->state == DNS_TRANSACTION_ATTEMPTS_MAX_REACHED) {
-                log_debug("DONE with MDNS probing");
-
-                _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
-                _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
-                LinkAddress *a;
-                int r;
-
-                answer = dns_answer_new(4);
-                LIST_FOREACH(addresses, a, i->scope->link->addresses) {
-                        r = dns_answer_add(answer, a->mdns_address_rr, 0, DNS_ANSWER_CACHE_FLUSH);
-                        if (r < 0) {
-                                log_debug_errno(r, "Failed to add address RR to answer: %m");
-                                return;
-                        }
-                        r = dns_answer_add(answer, a->mdns_ptr_rr, 0, DNS_ANSWER_CACHE_FLUSH);
-                        if (r < 0) {
-                                log_debug_errno(r, "Failed to add PTR RR to answer: %m");
-                                return;
-                        }
-                }
-
-                if (dns_answer_isempty(answer)) {
-                        log_debug("Nothing to announce for mDNS.");
-                        return;
-                }
-
-                r = dns_packet_new(&p, DNS_PROTOCOL_MDNS, 0);
-                if (r < 0) {
-                        log_debug_errno(r, "Failed to create a packet: %m");
-                        return;
-                }
-                DNS_PACKET_HEADER(p)->flags = htobe16(DNS_PACKET_MAKE_FLAGS(
-                                                                      1 /* qr */,
-                                                                      0 /* opcode */,
-                                                                      0 /* c */,
-                                                                      0 /* tc */,
-                                                                      0,
-                                                                      0 /* (ra) */,
-                                                                      0 /* (ad) */,
-                                                                      0 /* (cd) */,
-                                                                      DNS_RCODE_SUCCESS));
-                r = dns_packet_append_answer(p, answer);
-                if (r < 0) {
-                        log_debug("Can't append answer to packet");
-                        return;
-                }
-                DNS_PACKET_HEADER(p)->ancount = htobe16(dns_answer_size(answer));
-                r = dns_scope_emit_udp(i->scope, -1, p);
-                if (r < 0) {
-                        log_debug_errno(r, "Failed to send reply packet: %m");
-                        return;
-                }
-        } else {
-                log_debug("STILL probing (%s)", dns_transaction_state_to_string(t->state));
-        }
-
         dns_transaction_gc(t);
 }
 

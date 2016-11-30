@@ -360,9 +360,16 @@ void dns_transaction_complete(DnsTransaction *t, DnsTransactionState state) {
                 dns_query_candidate_notify(c);
         SWAP_TWO(t->notify_query_candidates, t->notify_query_candidates_done);
 
-        SET_FOREACH_MOVE(z, t->notify_zone_items_done, t->notify_zone_items)
+        bool is_probing = false;
+        SET_FOREACH_MOVE(z, t->notify_zone_items_done, t->notify_zone_items) {
+                if (!is_probing && z->probe_transaction)
+                        is_probing = true;
                 dns_zone_item_notify(z);
+        }
         SWAP_TWO(t->notify_zone_items, t->notify_zone_items_done);
+        if (is_probing) {
+                dns_scope_announce(t->scope);
+        }
 
         SET_FOREACH_MOVE(d, t->notify_transactions_done, t->notify_transactions)
                 dns_transaction_notify(d, t);

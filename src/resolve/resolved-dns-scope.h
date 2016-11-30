@@ -112,3 +112,5 @@ bool dns_scope_name_needs_search_domain(DnsScope *s, const char *name);
 bool dns_scope_network_good(DnsScope *s);
 
 int dns_scope_ifindex(DnsScope *s);
+
+void dns_scope_announce(DnsScope *scope);

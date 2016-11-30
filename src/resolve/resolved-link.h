@@ -118,6 +118,4 @@ int link_address_update_rtnl(LinkAddress *a, sd_netlink_message *m);
 bool link_address_relevant(LinkAddress *l, bool local_multicast);
 void link_address_add_rrs(LinkAddress *a, bool force_remove);
 
-bool link_probing_mdns(Link *l);
-
 DEFINE_TRIVIAL_CLEANUP_FUNC(Link*, link_free);
