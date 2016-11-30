@@ -78,6 +78,8 @@ struct DnsTransaction {
 
         bool clamp_ttl:1;
 
+        bool probing:1;
+
         DnsPacket *sent, *received;
 
         DnsAnswer *answer;
