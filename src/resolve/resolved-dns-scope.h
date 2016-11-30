@@ -56,6 +56,9 @@ struct DnsScope {
         OrderedHashmap *conflict_queue;
         sd_event_source *conflict_event_source;
 
+        bool announced;
+        sd_event_source *announce_event_source;
+
         RateLimit ratelimit;
 
         usec_t resend_timeout;

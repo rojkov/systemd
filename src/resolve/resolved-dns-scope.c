@@ -1056,6 +1056,16 @@ int dns_scope_ifindex(DnsScope *s) {
         return 0;
 }
 
+static int on_announcement_timeout(sd_event_source *s, usec_t usec, void *userdata) {
+        DnsScope *scope = userdata;
+
+        assert(s);
+        assert(s);
+
+        dns_scope_announce(scope);
+        return 0;
+}
+
 void dns_scope_announce(DnsScope *scope) {
         _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
         _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
@@ -1112,5 +1122,24 @@ void dns_scope_announce(DnsScope *scope) {
         if (r < 0) {
                 log_debug_errno(r, "Failed to send reply packet: %m");
                 return;
+        }
+
+        if (!scope->announced) {
+                usec_t ts;
+
+                scope->announced = true;
+
+                assert_se(sd_event_now(scope->manager->event, clock_boottime_or_monotonic(), &ts) >= 0);
+                ts += 1 * USEC_PER_SEC;
+
+                r = sd_event_add_time(
+                                scope->manager->event,
+                                &scope->announce_event_source,
+                                clock_boottime_or_monotonic(),
+                                ts,
+                                MDNS_JITTER_RANGE_USEC,
+                                on_announcement_timeout, scope);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to schedule second announcement: %m");
         }
 }

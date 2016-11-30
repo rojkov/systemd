@@ -1530,6 +1530,7 @@ int dns_transaction_go(DnsTransaction *t) {
                         break;
 
                 case DNS_PROTOCOL_MDNS:
+                        /* TODO: When probing jitter is always 250ms */
                         jitter %= MDNS_JITTER_RANGE_USEC;
                         jitter += MDNS_JITTER_MIN_USEC;
                         accuracy = MDNS_JITTER_RANGE_USEC;
