@@ -798,8 +798,15 @@ DnsTransaction *dns_scope_find_transaction(DnsScope *scope, DnsResourceKey *key,
         /* Try to find an ongoing transaction that is a equal to the
          * specified question */
         t = hashmap_get(scope->transactions_by_key, key);
-        if (!t)
-                return NULL;
+        if (!t) {
+                DnsResourceKey *key_any;
+
+                key_any = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_ANY, dns_resource_key_name(key));
+                t = hashmap_get(scope->transactions_by_key, key_any);
+                key_any = dns_resource_key_unref(key_any);
+                if (!t)
+                        return NULL;
+        }
 
         /* Refuse reusing transactions that completed based on cached
          * data instead of a real packet, if that's requested. */
@@ -943,16 +950,16 @@ void dns_scope_check_conflicts(DnsScope *scope, DnsPacket *p) {
         assert(scope);
         assert(p);
 
-        if (p->protocol != DNS_PROTOCOL_LLMNR)
+        if (!IN_SET(p->protocol, DNS_PROTOCOL_LLMNR, DNS_PROTOCOL_MDNS))
                 return;
 
         if (DNS_PACKET_RRCOUNT(p) <= 0)
                 return;
 
-        if (DNS_PACKET_LLMNR_C(p) != 0)
+        if (DNS_PACKET_LLMNR_C(p) != 0 && p->protocol == DNS_PROTOCOL_LLMNR)
                 return;
 
-        if (DNS_PACKET_LLMNR_T(p) != 0)
+        if (DNS_PACKET_LLMNR_T(p) != 0 && p->protocol == DNS_PROTOCOL_LLMNR)
                 return;
 
         if (manager_our_packet(scope->manager, p))
