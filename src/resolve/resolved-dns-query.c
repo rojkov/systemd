@@ -350,7 +350,6 @@ fail:
 
 static void dns_query_stop(DnsQuery *q) {
         DnsQueryCandidate *c;
-        log_debug(" * dns_query_stop()");
 
         assert(q);
 
@@ -815,13 +814,11 @@ static void dns_query_accept(DnsQuery *q, DnsQueryCandidate *c) {
         }
 
         SET_FOREACH(t, c->transactions, i) {
-                log_debug(" * dns_query_accept() iterating over transactions. state: %d", t->state);
 
                 switch (t->state) {
 
                 case DNS_TRANSACTION_SUCCESS: {
                         /* We found a successfully reply, merge it into the answer */
-                        log_debug("We found a successfully reply, merge it into the answer - %p (trans. ans - %p)", q->answer, t->answer);
                         r = dns_answer_extend(&q->answer, t->answer);
                         if (r < 0)
                                 goto fail;

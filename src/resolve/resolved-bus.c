@@ -357,14 +357,11 @@ static int bus_method_resolve_hostname(sd_bus_message *message, void *userdata, 
         q->complete = bus_method_resolve_hostname_complete;
         q->suppress_unroutable_family = family == AF_UNSPEC;
 
-        log_debug("resolved-bus.c:363: Currently we are looking for %s", DNS_SEARCH_DOMAIN_NAME(q->answer_search_domain));
         r = dns_query_bus_track(q, message);
         if (r < 0)
                 goto fail;
 
-        log_debug("resolved-bus.c:364");
         r = dns_query_go(q);
-        log_debug("resolved-bus.c:366 (%s)", DNS_SEARCH_DOMAIN_NAME(q->answer_search_domain));
         if (r < 0)
                 goto fail;
 
