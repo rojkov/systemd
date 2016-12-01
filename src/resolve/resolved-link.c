@@ -172,7 +172,6 @@ void link_allocate_scopes(Link *l) {
 void link_add_rrs(Link *l, bool force_remove) {
         LinkAddress *a;
 
-        printf(" link_add_rrs(%p, %d)\n", l, force_remove);
         LIST_FOREACH(addresses, a, l->addresses)
                 link_address_add_rrs(a, force_remove);
 }

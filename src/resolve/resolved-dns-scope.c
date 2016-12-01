@@ -86,7 +86,6 @@ int dns_scope_new(Manager *m, DnsScope **ret, Link *l, DnsProtocol protocol, int
 static void dns_scope_abort_transactions(DnsScope *s) {
         assert(s);
 
-        log_debug(" * dns_scope_abort_transactions()");
         while (s->transactions) {
                 DnsTransaction *t = s->transactions;
 

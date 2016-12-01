@@ -2113,7 +2113,6 @@ int dns_packet_extract(DnsPacket *p) {
         dns_packet_rewind(p, DNS_PACKET_HEADER_SIZE);
 
         n = DNS_PACKET_QDCOUNT(p);
-        log_debug(" * dns_packet_extract() QDCOUNT: %d", n);
         if (n > 0) {
                 question = dns_question_new(n);
                 if (!question)
@@ -2259,7 +2258,6 @@ int dns_packet_is_reply_for(DnsPacket *p, const DnsResourceKey *key) {
         assert(p);
         assert(key);
 
-        log_debug(" * dns_packet_is_reply_for() 1");
         /* Checks if the specified packet is a reply for the specified
          * key and the specified key is the only one in the question
          * section. */
@@ -2267,17 +2265,14 @@ int dns_packet_is_reply_for(DnsPacket *p, const DnsResourceKey *key) {
         if (DNS_PACKET_QR(p) != 1)
                 return 0;
 
-        log_debug(" * dns_packet_is_reply_for() 2");
         /* Let's unpack the packet, if that hasn't happened yet. */
         r = dns_packet_extract(p);
         if (r < 0)
                 return r;
-        log_debug(" * dns_packet_is_reply_for() 3 %p", p->question);
 
         if (p->question->n_keys != 1)
                 return 0;
 
-        log_debug(" * dns_packet_is_reply_for() 4");
         return dns_resource_key_equal(p->question->keys[0], key);
 }
 

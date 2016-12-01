@@ -146,7 +146,6 @@ static void bus_method_resolve_hostname_complete(DnsQuery *q) {
         int ifindex, r;
 
         assert(q);
-        log_debug("resolved-bus.c:149: bus_method_resolve_hostname_complete() Answer: %p. RetCode: %d", q->answer, q->answer_rcode);
 
         if (q->state != DNS_TRANSACTION_SUCCESS) {
                 r = reply_query_state(q);
@@ -173,7 +172,6 @@ static void bus_method_resolve_hostname_complete(DnsQuery *q) {
 
         DNS_ANSWER_FOREACH_IFINDEX(rr, ifindex, q->answer) {
                 DnsQuestion *question;
-                log_debug("bus.c:176: iterating over DNS answer: %s", dns_resource_key_name(rr->key));
 
                 question = dns_query_question_for_protocol(q, q->answer_protocol);
 
@@ -226,7 +224,6 @@ finish:
         }
 
         dns_query_free(q);
-        log_debug("resolved-bus.c:228: bus_method_resolve_hostname_complete()");
 }
 
 static int check_ifindex_flags(int ifindex, uint64_t *flags, uint64_t ok, sd_bus_error *error) {
@@ -1380,7 +1377,6 @@ static int bus_property_get_cache_statistics(
         assert(m);
 
         LIST_FOREACH(scopes, s, m->dns_scopes) {
-                log_info("Scope %p");
                 size += dns_cache_size(&s->cache);
                 hit += s->cache.n_hit;
                 miss += s->cache.n_miss;

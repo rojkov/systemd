@@ -59,7 +59,6 @@ static void dns_query_candidate_stop(DnsQueryCandidate *c) {
         DnsTransaction *t;
 
         assert(c);
-        log_debug(" * dns_query_candidate_stop()");
 
         while ((t = set_steal_first(c->transactions))) {
                 set_remove(t->notify_query_candidates, c);
@@ -307,7 +306,6 @@ void dns_query_candidate_notify(DnsQueryCandidate *c) {
         DnsTransactionState state;
         int r;
 
-        log_debug(" * dns_query_candidate_notify() Enter");
         assert(c);
 
         state = dns_query_candidate_state(c);
@@ -342,7 +340,6 @@ void dns_query_candidate_notify(DnsQueryCandidate *c) {
         }
 
         dns_query_ready(c->query);
-        log_debug(" * dns_query_candidate_notify() Exit");
         return;
 
 fail:
@@ -543,7 +540,6 @@ static void dns_query_complete(DnsQuery *q, DnsTransactionState state) {
         assert(q);
         assert(!DNS_TRANSACTION_IS_LIVE(state));
         assert(DNS_TRANSACTION_IS_LIVE(q->state));
-        log_debug(" * dns_query_complete(). Enter");
 
         /* Note that this call might invalidate the query. Callers
          * should hence not attempt to access the query or transaction
@@ -554,7 +550,6 @@ static void dns_query_complete(DnsQuery *q, DnsTransactionState state) {
         dns_query_stop(q);
         if (q->complete)
                 q->complete(q);
-        log_debug(" * dns_query_complete(). Exit");
 }
 
 static int on_query_timeout(sd_event_source *s, usec_t usec, void *userdata) {
@@ -680,7 +675,6 @@ int dns_query_go(DnsQuery *q) {
         DnsQueryCandidate *c;
         int r;
 
-        log_debug(" * dns_query_go() Enter");
         assert(q);
 
         if (q->state != DNS_TRANSACTION_NULL)
@@ -785,7 +779,6 @@ int dns_query_go(DnsQuery *q) {
         q->block_ready--;
         dns_query_ready(q);
 
-        log_debug(" * dns_query_go() Exit");
         return 1;
 
 fail:
@@ -801,7 +794,6 @@ static void dns_query_accept(DnsQuery *q, DnsQueryCandidate *c) {
         Iterator i;
         int r;
 
-        log_debug(" * dns_query_accept() Enter");
         assert(q);
 
         if (!c) {
@@ -889,11 +881,9 @@ static void dns_query_accept(DnsQuery *q, DnsQueryCandidate *c) {
                 goto fail;
 
         dns_query_complete(q, state);
-        log_debug(" * dns_query_accept() Exiting (Answer %p)", q->answer);
         return;
 
 fail:
-        log_debug(" ! dns_query_accept() failed (%d)", -r);
         q->answer_errno = -r;
         dns_query_complete(q, DNS_TRANSACTION_ERRNO);
 }
@@ -903,7 +893,6 @@ void dns_query_ready(DnsQuery *q) {
         DnsQueryCandidate *bad = NULL, *c;
         bool pending = false;
 
-        log_debug(" * dns_query_ready() Enter");
         assert(q);
         assert(DNS_TRANSACTION_IS_LIVE(q->state));
 
@@ -925,7 +914,6 @@ void dns_query_ready(DnsQuery *q) {
                         /* One of the candidates is successful,
                          * let's use it, and copy its data out */
                         dns_query_accept(q, c);
-                        log_debug(" * dns_query_ready() Exit 1");
                         return;
 
                 case DNS_TRANSACTION_NULL:
