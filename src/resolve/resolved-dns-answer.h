@@ -37,6 +37,7 @@ typedef enum DnsAnswerFlags {
         DNS_ANSWER_CACHEABLE     = 2, /* Item is subject to caching */
         DNS_ANSWER_SHARED_OWNER  = 4, /* For mDNS: RRset may be owner by multiple peers */
         DNS_ANSWER_CACHE_FLUSH   = 8, /* For mDNS: defines cache-flush bit in the rrclass of response records */
+        DNS_ANSWER_GOODBYE       = 16, /* Item is subject to disappear */
 } DnsAnswerFlags;
 
 struct DnsAnswerItem {
