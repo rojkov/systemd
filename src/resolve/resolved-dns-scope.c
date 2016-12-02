@@ -1105,32 +1105,14 @@ void dns_scope_announce(DnsScope *scope, bool goodbye) {
                 }
         }
 
-        if (dns_answer_isempty(answer)) {
-                log_debug("Nothing to announce for mDNS.");
+        if (dns_answer_isempty(answer))
                 return;
-        }
 
-        r = dns_packet_new(&p, DNS_PROTOCOL_MDNS, 0);
+        r = dns_scope_make_reply_packet(scope, 0, DNS_RCODE_SUCCESS, NULL, answer, NULL, false, &p);
         if (r < 0) {
-                log_debug_errno(r, "Failed to create a packet: %m");
+                log_debug_errno(r, "Failed to build reply packet: %m");
                 return;
         }
-        DNS_PACKET_HEADER(p)->flags = htobe16(DNS_PACKET_MAKE_FLAGS(
-                                                              1 /* qr */,
-                                                              0 /* opcode */,
-                                                              0 /* aa */,
-                                                              0 /* tc */,
-                                                              0 /* rd */,
-                                                              0 /* (ra) */,
-                                                              0 /* (ad) */,
-                                                              0 /* (cd) */,
-                                                              DNS_RCODE_SUCCESS));
-        r = dns_packet_append_answer(p, answer);
-        if (r < 0) {
-                log_debug("Can't append answer to packet");
-                return;
-        }
-        DNS_PACKET_HEADER(p)->ancount = htobe16(dns_answer_size(answer));
         r = dns_scope_emit_udp(scope, -1, p);
         if (r < 0) {
                 log_debug_errno(r, "Failed to send reply packet: %m");
