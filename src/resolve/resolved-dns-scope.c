@@ -124,6 +124,8 @@ DnsScope* dns_scope_free(DnsScope *s) {
         ordered_hashmap_free(s->conflict_queue);
         sd_event_source_unref(s->conflict_event_source);
 
+        sd_event_source_unref(s->announce_event_source);
+
         dns_cache_flush(&s->cache);
         dns_zone_flush(&s->zone);
 
@@ -794,8 +796,15 @@ DnsTransaction *dns_scope_find_transaction(DnsScope *scope, DnsResourceKey *key,
         /* Try to find an ongoing transaction that is a equal to the
          * specified question */
         t = hashmap_get(scope->transactions_by_key, key);
-        if (!t)
-                return NULL;
+        if (!t) {
+                DnsResourceKey *key_any;
+
+                key_any = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_ANY, dns_resource_key_name(key));
+                t = hashmap_get(scope->transactions_by_key, key_any);
+                key_any = dns_resource_key_unref(key_any);
+                if (!t)
+                        return NULL;
+        }
 
         /* Refuse reusing transactions that completed based on cached
          * data instead of a real packet, if that's requested. */
@@ -939,17 +948,19 @@ void dns_scope_check_conflicts(DnsScope *scope, DnsPacket *p) {
         assert(scope);
         assert(p);
 
-        if (p->protocol != DNS_PROTOCOL_LLMNR)
+        if (!IN_SET(p->protocol, DNS_PROTOCOL_LLMNR, DNS_PROTOCOL_MDNS))
                 return;
 
         if (DNS_PACKET_RRCOUNT(p) <= 0)
                 return;
 
-        if (DNS_PACKET_LLMNR_C(p) != 0)
-                return;
+        if (p->protocol == DNS_PROTOCOL_LLMNR) {
+                if (DNS_PACKET_LLMNR_C(p) != 0)
+                        return;
 
-        if (DNS_PACKET_LLMNR_T(p) != 0)
-                return;
+                if (DNS_PACKET_LLMNR_T(p) != 0)
+                        return;
+        }
 
         if (manager_our_packet(scope->manager, p))
                 return;
@@ -1051,4 +1062,97 @@ int dns_scope_ifindex(DnsScope *s) {
                 return s->link->ifindex;
 
         return 0;
+}
+
+static int on_announcement_timeout(sd_event_source *s, usec_t usec, void *userdata) {
+        DnsScope *scope = userdata;
+
+        assert(s);
+        assert(s);
+
+        sd_event_source_unref(scope->announce_event_source);
+        scope->announce_event_source = NULL;
+
+        dns_scope_announce(scope);
+        return 0;
+}
+
+void dns_scope_announce(DnsScope *scope) {
+        _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
+        _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
+        LinkAddress *a;
+        int r;
+
+        if (!scope)
+                return;
+
+        log_debug("Announce MDNS RRs");
+
+        if (scope->protocol != DNS_PROTOCOL_MDNS)
+                return;
+
+        answer = dns_answer_new(4);
+        LIST_FOREACH(addresses, a, scope->link->addresses) {
+                r = dns_answer_add(answer, a->mdns_address_rr, 0);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to add address RR to answer: %m");
+                        return;
+                }
+                r = dns_answer_add(answer, a->mdns_ptr_rr, 0);
+                if (r < 0) {
+                        log_debug_errno(r, "Failed to add PTR RR to answer: %m");
+                        return;
+                }
+        }
+
+        if (dns_answer_isempty(answer)) {
+                log_debug("Nothing to announce for mDNS.");
+                return;
+        }
+
+        r = dns_packet_new(&p, DNS_PROTOCOL_MDNS, 0);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to create a packet: %m");
+                return;
+        }
+        DNS_PACKET_HEADER(p)->flags = htobe16(DNS_PACKET_MAKE_FLAGS(
+                                                              1 /* qr */,
+                                                              0 /* opcode */,
+                                                              0 /* aa */,
+                                                              0 /* tc */,
+                                                              0 /* rd */,
+                                                              0 /* (ra) */,
+                                                              0 /* (ad) */,
+                                                              0 /* (cd) */,
+                                                              DNS_RCODE_SUCCESS));
+        r = dns_packet_append_answer(p, answer);
+        if (r < 0) {
+                log_debug("Can't append answer to packet");
+                return;
+        }
+        DNS_PACKET_HEADER(p)->ancount = htobe16(dns_answer_size(answer));
+        r = dns_scope_emit_udp(scope, -1, p);
+        if (r < 0) {
+                log_debug_errno(r, "Failed to send reply packet: %m");
+                return;
+        }
+
+        if (!scope->announced) {
+                usec_t ts;
+
+                scope->announced = true;
+
+                assert_se(sd_event_now(scope->manager->event, clock_boottime_or_monotonic(), &ts) >= 0);
+                ts += 1 * USEC_PER_SEC;
+
+                r = sd_event_add_time(
+                                scope->manager->event,
+                                &scope->announce_event_source,
+                                clock_boottime_or_monotonic(),
+                                ts,
+                                MDNS_JITTER_RANGE_USEC,
+                                on_announcement_timeout, scope);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to schedule second announcement: %m");
+        }
 }
