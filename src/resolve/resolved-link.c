@@ -745,6 +745,11 @@ LinkAddress *link_address_free(LinkAddress *a) {
 }
 
 void link_address_add_rrs(LinkAddress *a, bool force_remove) {
+    char key_str[DNS_RESOURCE_KEY_STRING_MAX];
+        Iterator i;
+        char *service_type;
+        DnsResourceRecord *aux_rr;
+        Netservice *netservice;
         int r;
 
         assert(a);
@@ -805,6 +810,8 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         }
                 }
 
+                log_debug("****** %d %d %p %d %d", (!force_remove), link_address_relevant(a, true), a->link->mdns_ipv4_scope, a->link->mdns_support == RESOLVE_SUPPORT_YES, a->link->manager->mdns_support == RESOLVE_SUPPORT_YES);
+
                 if (!force_remove &&
                     link_address_relevant(a, true) &&
                     a->link->mdns_ipv4_scope &&
@@ -844,6 +851,53 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, a->mdns_ptr_rr, false);
                         if (r < 0)
                                 log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
+
+                        SET_FOREACH(service_type, a->link->manager->netservice_types, i) {
+                            aux_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_PTR, "_services._dns-sd._udp.local");
+                            aux_rr->ptr.name = strdup(strjoina(service_type, ".local"));
+                            aux_rr->ttl = MDNS_DEFAULT_TTL;
+                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, false);
+                            if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv4 DNS-SD PTR record to MDNS zone: %m");
+                            else
+                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(aux_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, aux_rr, aux_rr->n_ref);
+                            dns_resource_record_unref(aux_rr);
+                            log_debug("now %p has refcount %d", aux_rr, aux_rr->n_ref);
+                        }
+
+                        LIST_FOREACH(netservices, netservice, a->link->manager->netservices) {
+                            char *service_name = strjoina(netservice->type, ".local");
+                            char *instance_name;
+
+                            if (asprintf(&instance_name, "%s.%s", netservice->instance_name, service_name) < 0) {
+                                r = -ENOMEM;
+                                goto fail;
+                            }
+
+                            aux_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_PTR, service_name);
+                            aux_rr->ptr.name = strdup(instance_name);
+                            aux_rr->ttl = MDNS_DEFAULT_TTL;
+                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, false);
+                            if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
+                            else
+                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(aux_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, aux_rr, aux_rr->n_ref);
+                            dns_resource_record_unref(aux_rr);
+
+                            aux_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_SRV, instance_name);
+                            aux_rr->srv.priority = 0;
+                            aux_rr->srv.weight = 0;
+                            aux_rr->srv.port = netservice->port;
+                            aux_rr->srv.name = strdup(a->link->manager->mdns_hostname);
+                            aux_rr->ttl = MDNS_DEFAULT_TTL;
+                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, false);
+                            if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv4 SRV record to MDNS zone: %m");
+                            else
+                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(aux_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, aux_rr, aux_rr->n_ref);
+                            dns_resource_record_unref(aux_rr);
+                            free(instance_name);
+                        }
                 } else {
                         if (a->mdns_address_rr) {
                                 if (a->link->mdns_ipv4_scope)
@@ -1185,6 +1239,7 @@ int link_load_user(Link *l) {
         s = resolve_support_from_string(mdns);
         if (s >= 0)
                 l->mdns_support = s;
+        log_debug("**** MDNS support is %s for %s", mdns, l->state_file);
 
         /* If we can't recognize the DNSSEC setting, then set it to invalid, so that the daemon default is used. */
         l->dnssec_mode = dnssec_mode_from_string(dnssec);

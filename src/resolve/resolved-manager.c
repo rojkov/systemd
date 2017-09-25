@@ -45,6 +45,7 @@
 #include "resolved-llmnr.h"
 #include "resolved-manager.h"
 #include "resolved-mdns.h"
+#include "resolved-netservice.h"
 #include "resolved-resolv-conf.h"
 #include "socket-util.h"
 #include "string-table.h"
@@ -585,6 +586,10 @@ int manager_new(Manager **ret) {
         if (r < 0)
                 log_warning_errno(r, "Failed to parse configuration file: %m");
 
+        r = netservice_load(m);
+        if (r < 0)
+            log_warning_errno(r, "Failed to load netservice files: %m");
+
         r = sd_event_default(&m->event);
         if (r < 0)
                 return r;
@@ -693,6 +698,9 @@ Manager *manager_free(Manager *m) {
         free(m->full_hostname);
         free(m->llmnr_hostname);
         free(m->mdns_hostname);
+
+        m->netservice_types = set_free_free(m->netservice_types);
+        netservice_remove_all(m->netservices);
 
         dns_trust_anchor_flush(&m->trust_anchor);
         manager_etc_hosts_flush(m);

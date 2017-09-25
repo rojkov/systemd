@@ -36,6 +36,7 @@ typedef struct Manager Manager;
 #include "resolved-dns-server.h"
 #include "resolved-dns-stream.h"
 #include "resolved-dns-trust-anchor.h"
+#include "resolved-netservice.h"
 #include "resolved-link.h"
 
 #define MANAGER_SEARCH_DOMAINS_MAX 32
@@ -100,6 +101,10 @@ struct Manager {
         /* mDNS */
         int mdns_ipv4_fd;
         int mdns_ipv6_fd;
+
+        /* DNS-SD */
+        Set *netservice_types;
+        LIST_HEAD(Netservice, netservices);
 
         sd_event_source *mdns_ipv4_event_source;
         sd_event_source *mdns_ipv6_event_source;
