@@ -531,7 +531,7 @@ void dns_zone_item_notify(DnsZoneItem *i) {
                         we_lost = true;
                 } else {
                         assert(i->probe_transaction->received);
-                        we_lost = memcmp(&i->probe_transaction->received->sender, &i->probe_transaction->received->destination, FAMILY_ADDRESS_SIZE(i->probe_transaction->received->family)) < 0;
+                        we_lost = (memcmp(&i->probe_transaction->received->sender, &i->probe_transaction->received->destination, FAMILY_ADDRESS_SIZE(i->probe_transaction->received->family)) < 0) && !(i->rr->key->type == DNS_TYPE_PTR && (dns_name_endswith(i->rr->ptr.name, "_tcp.local") || dns_name_endswith(i->rr->ptr.name, "_udp.local")));
                         if (we_lost)
                                 log_debug("Got a successful probe reply for an established RR, and we have a lexicographically larger IP address and thus lost.");
                 }
