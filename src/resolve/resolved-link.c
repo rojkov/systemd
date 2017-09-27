@@ -896,6 +896,27 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                             else
                                 log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(aux_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, aux_rr, aux_rr->n_ref);
                             dns_resource_record_unref(aux_rr);
+
+                            aux_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_TXT, instance_name);
+                            DnsTxtItem *txt_item;
+                            /* RFC 6763, section 6.1 suggests to treat
+                             * empty TXT RRs as equivalent to a TXT record
+                             * with a single empty string. */
+
+                            txt_item = malloc0(offsetof(DnsTxtItem, data) + 1); /* for safety reasons we add an extra NUL byte */
+                            if (!txt_item) {
+                                    r = -ENOMEM;
+                                    goto fail;
+                            }
+                            aux_rr->txt.items = txt_item;
+                            aux_rr->ttl = MDNS_DEFAULT_TTL;
+                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, false);
+                            if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv4 TXT record to MDNS zone: %m");
+                            else
+                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(aux_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, aux_rr, aux_rr->n_ref);
+                            dns_resource_record_unref(aux_rr);
+
                             free(instance_name);
                         }
                 } else {
