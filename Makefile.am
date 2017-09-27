@@ -5871,7 +5871,8 @@ gperf_txt_sources += \
 	src/resolve/dns_type-list.txt
 
 gperf_gperf_sources += \
-	src/resolve/resolved-gperf.gperf
+	src/resolve/resolved-gperf.gperf \
+	src/resolve/resolved-netservice-gperf.gperf
 
 EXTRA_DIST += \
 	units/systemd-resolved.service.m4.in \
