@@ -5654,6 +5654,8 @@ systemd_resolved_SOURCES = \
 	src/resolve/resolved-llmnr.c \
 	src/resolve/resolved-mdns.h \
 	src/resolve/resolved-mdns.c \
+	src/resolve/resolved-netservice.h \
+	src/resolve/resolved-netservice.c \
 	src/resolve/resolved-def.h \
 	$(basic_dns_sources) \
 	src/resolve/resolved-dns-query.h \
