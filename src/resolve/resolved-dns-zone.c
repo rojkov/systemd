@@ -290,6 +290,7 @@ int dns_zone_put(DnsZone *z, DnsScope *s, DnsResourceRecord *rr, bool probe) {
 
 int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **ret_answer, DnsAnswer **ret_soa, bool *ret_tentative) {
         _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL, *soa = NULL;
+        char key_str[DNS_RESOURCE_KEY_STRING_MAX];
         unsigned n_answer = 0;
         DnsZoneItem *j, *first;
         bool tentative = true, need_soa = false;
@@ -304,6 +305,7 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
 
         /* First iteration, count what we have */
 
+        log_debug("Lookup for %s", dns_resource_key_to_string(key, key_str, sizeof key_str));
         if (key->type == DNS_TYPE_ANY || key->class == DNS_CLASS_ANY) {
                 bool found = false, added = false;
                 int k;
@@ -339,9 +341,12 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
                  * the right key immediately */
 
                 first = hashmap_get(z->by_key, key);
+                log_debug("*** first: %p", first);
                 LIST_FOREACH(by_key, j, first) {
-                        if (!IN_SET(j->state, DNS_ZONE_ITEM_PROBING, DNS_ZONE_ITEM_ESTABLISHED, DNS_ZONE_ITEM_VERIFYING))
+                        if (!IN_SET(j->state, DNS_ZONE_ITEM_PROBING, DNS_ZONE_ITEM_ESTABLISHED, DNS_ZONE_ITEM_VERIFYING)) {
+                                log_debug("Zone item is in %d - ignoring...", j->state);
                                 continue;
+                        }
 
                         found = true;
                         n_answer++;
@@ -349,9 +354,12 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
 
                 if (!found) {
                         first = hashmap_get(z->by_name, dns_resource_key_name(key));
+                        log_debug("*** first: %p", first);
                         LIST_FOREACH(by_name, j, first) {
-                                if (!IN_SET(j->state, DNS_ZONE_ITEM_PROBING, DNS_ZONE_ITEM_ESTABLISHED, DNS_ZONE_ITEM_VERIFYING))
+                                if (!IN_SET(j->state, DNS_ZONE_ITEM_PROBING, DNS_ZONE_ITEM_ESTABLISHED, DNS_ZONE_ITEM_VERIFYING)) {
+                                        log_debug("Zone item is in %d - ignoring...", j->state);
                                         continue;
+                                }
 
                                 need_soa = true;
                                 break;
@@ -359,8 +367,10 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
                 }
         }
 
-        if (n_answer <= 0 && !need_soa)
+        if (n_answer <= 0 && !need_soa) {
+                log_debug("No answers");
                 goto return_empty;
+        }
 
         if (n_answer > 0) {
                 answer = dns_answer_new(n_answer);
@@ -425,6 +435,7 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
                 }
 
                 if (!found) {
+                        log_debug("**");
                         bool add_soa = false;
 
                         first = hashmap_get(z->by_name, dns_resource_key_name(key));
@@ -466,6 +477,7 @@ int dns_zone_lookup(DnsZone *z, DnsResourceKey *key, int ifindex, DnsAnswer **re
         return 1;
 
 return_empty:
+        log_debug("Nothing found");
         *ret_answer = NULL;
 
         if (ret_soa)

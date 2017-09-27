@@ -629,12 +629,16 @@ int dns_scope_make_reply_packet(
 
         if (dns_question_isempty(q) &&
             dns_answer_isempty(answer) &&
-            dns_answer_isempty(soa))
+            dns_answer_isempty(soa)) {
+                log_debug("*** q: %d, a: %d, s: %d", dns_question_isempty(q), dns_answer_isempty(answer), dns_answer_isempty(soa));
                 return -EINVAL;
+        }
 
         r = dns_packet_new(&p, s->protocol, 0);
-        if (r < 0)
+        if (r < 0) {
+                log_debug("*** Can't make new packet");
                 return r;
+        }
 
         DNS_PACKET_HEADER(p)->id = id;
         DNS_PACKET_HEADER(p)->flags = htobe16(DNS_PACKET_MAKE_FLAGS(
@@ -649,18 +653,24 @@ int dns_scope_make_reply_packet(
                                                               rcode));
 
         r = dns_packet_append_question(p, q);
-        if (r < 0)
+        if (r < 0) {
+                log_debug("***");
                 return r;
+        }
         DNS_PACKET_HEADER(p)->qdcount = htobe16(dns_question_size(q));
 
         r = dns_packet_append_answer(p, answer);
-        if (r < 0)
+        if (r < 0) {
+                log_debug("***");
                 return r;
+        }
         DNS_PACKET_HEADER(p)->ancount = htobe16(dns_answer_size(answer));
 
         r = dns_packet_append_answer(p, soa);
-        if (r < 0)
+        if (r < 0) {
+                log_debug("***");
                 return r;
+        }
         DNS_PACKET_HEADER(p)->arcount = htobe16(dns_answer_size(soa));
 
         *ret = p;
