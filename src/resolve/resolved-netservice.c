@@ -75,7 +75,7 @@ int netservice_load(Manager *manager) {
 
     assert(manager);
 
-    r = conf_files_list_strv(&files, ".netservice", NULL, 0, netservice_dirs);
+    r = conf_files_list_strv(&files, ".netservice", NULL, netservice_dirs);
     if (r < 0)
         return log_error_errno(r, "Failed to enumerate netservice files: %m");
 

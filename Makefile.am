@@ -5688,7 +5688,8 @@ systemd_resolved_SOURCES = \
 nodist_systemd_resolved_SOURCES = \
 	src/resolve/dns_type-from-name.h \
 	src/resolve/dns_type-to-name.h \
-	src/resolve/resolved-gperf.c
+	src/resolve/resolved-gperf.c \
+	src/resolve/resolved-netservice-gperf.c
 
 systemd_resolved_CFLAGS = \
 	$(AM_CFLAGS) \
