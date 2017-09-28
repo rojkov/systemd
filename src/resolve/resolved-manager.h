@@ -105,6 +105,7 @@ struct Manager {
         /* DNS-SD */
         Set *netservice_types;
         LIST_HEAD(Netservice, netservices);
+        unsigned n_netservices;
 
         sd_event_source *mdns_ipv4_event_source;
         sd_event_source *mdns_ipv6_event_source;

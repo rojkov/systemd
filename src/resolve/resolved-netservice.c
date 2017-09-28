@@ -4,10 +4,15 @@
 #include "resolved-manager.h"
 #include "resolved-dns-rr.h"
 #include "strv.h"
+#include "list.h"
 
 void netservice_free(Netservice *netservice) {
     if (!netservice)
         return;
+
+    assert(netservice->manager->n_netservices > 0);
+    LIST_REMOVE(netservices, netservice->manager->netservices, netservice);
+    netservice->manager->n_netservices--;
 
     dns_resource_record_unref(netservice->ptr_rr);
     dns_resource_record_unref(netservice->srv_rr);
@@ -39,6 +44,8 @@ static int netservice_load_one(Manager *manager, const char *filename) {
     if (!netservice)
         return log_oom();
 
+    netservice->manager = manager;
+
     netservice->filename = strdup(filename);
     if (!netservice->filename)
         return log_oom();
@@ -67,6 +74,7 @@ static int netservice_load_one(Manager *manager, const char *filename) {
     }
 
     LIST_PREPEND(netservices, manager->netservices, netservice);
+    manager->n_netservices++;
 
     netservice = NULL;
 

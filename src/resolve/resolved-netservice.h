@@ -19,6 +19,8 @@ struct Netservice {
         DnsResourceRecord *txt_rr;
 
         LIST_FIELDS(Netservice, netservices);
+
+        Manager *manager;
 };
 
 const struct ConfigPerfItem* resolved_netservice_gperf_lookup(const char *key, GPERF_LEN_TYPE length);
