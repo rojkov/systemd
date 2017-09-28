@@ -700,6 +700,7 @@ Manager *manager_free(Manager *m) {
         free(m->mdns_hostname);
 
         m->netservice_types = set_free_free(m->netservice_types);
+        log_debug("Currently there're %d netservices", m->n_netservices);
         netservice_remove_all(m->netservices);
 
         dns_trust_anchor_flush(&m->trust_anchor);
