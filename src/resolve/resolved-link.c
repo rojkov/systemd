@@ -890,7 +890,7 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                             aux_rr->srv.port = netservice->port;
                             aux_rr->srv.name = strdup(a->link->manager->mdns_hostname);
                             aux_rr->ttl = MDNS_DEFAULT_TTL;
-                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, false);
+                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, true);
                             if (r < 0)
                                 log_warning_errno(r, "Failed to add IPv4 SRV record to MDNS zone: %m");
                             else
