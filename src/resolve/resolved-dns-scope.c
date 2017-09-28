@@ -1079,6 +1079,7 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
         _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
         _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
         LinkAddress *a;
+        Netservice *ns;
         int r;
 
         if (!scope)
@@ -1087,7 +1088,7 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
         if (scope->protocol != DNS_PROTOCOL_MDNS)
                 return 0;
 
-        answer = dns_answer_new(scope->link->n_addresses * 2);
+        answer = dns_answer_new(scope->link->n_addresses * (2 + 6));
         if (!answer)
                 return log_oom();
 
@@ -1099,6 +1100,19 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
                 r = dns_answer_add(answer, a->mdns_ptr_rr, 0, goodbye ? DNS_ANSWER_GOODBYE : DNS_ANSWER_CACHE_FLUSH);
                 if (r < 0)
                         return log_debug_errno(r, "Failed to add PTR RR to answer: %m");
+                LIST_FOREACH(netservices, ns, scope->manager->netservices) {
+                        if (!goodbye ){
+                                r = dns_answer_add(answer, ns->ptr_rr, 0, 0);
+                                if (r < 0)
+                                        return log_debug_errno(r, "Failed to add DNS-SD PTR RR to answer: %m");
+                        }
+                        r = dns_answer_add(answer, ns->srv_rr, 0 , goodbye ? DNS_ANSWER_GOODBYE : DNS_ANSWER_CACHE_FLUSH);
+                        if (r < 0)
+                                return log_debug_errno(r, "Failed to add SRV RR to answer: %m");
+                        r = dns_answer_add(answer, ns->txt_rr, 0 , goodbye ? DNS_ANSWER_GOODBYE : DNS_ANSWER_CACHE_FLUSH);
+                        if (r < 0)
+                                return log_debug_errno(r, "Failed to add TXT RR to answer: %m");
+                }
         }
 
         if (dns_answer_isempty(answer))

@@ -5,15 +5,20 @@
 typedef struct Netservice Netservice;
 
 typedef struct Manager Manager;
+typedef struct DnsResourceRecord DnsResourceRecord;
 
 struct Netservice {
-    char *filename;
-    char *name;
-    char *instance_name;
-    char *type;
-    uint16_t port;
+        char *filename;
+        char *name;
+        char *instance_name;
+        char *type;
+        uint16_t port;
 
-    LIST_FIELDS(Netservice, netservices);
+        DnsResourceRecord *ptr_rr;
+        DnsResourceRecord *srv_rr;
+        DnsResourceRecord *txt_rr;
+
+        LIST_FIELDS(Netservice, netservices);
 };
 
 const struct ConfigPerfItem* resolved_netservice_gperf_lookup(const char *key, GPERF_LEN_TYPE length);
@@ -25,3 +30,4 @@ DEFINE_TRIVIAL_CLEANUP_FUNC(Netservice*, netservice_free);
 
 int netservice_load(Manager *manager);
 void netservice_remove_all(Netservice *first);
+int netservice_update_rrs(Netservice *first, const char *hostname);

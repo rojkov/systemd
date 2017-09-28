@@ -2,11 +2,16 @@
 #include "conf-parser.h"
 #include "resolved-netservice.h"
 #include "resolved-manager.h"
+#include "resolved-dns-rr.h"
 #include "strv.h"
 
 void netservice_free(Netservice *netservice) {
     if (!netservice)
         return;
+
+    dns_resource_record_unref(netservice->ptr_rr);
+    dns_resource_record_unref(netservice->srv_rr);
+    dns_resource_record_unref(netservice->txt_rr);
 
     free(netservice->filename);
     free(netservice->name);
@@ -98,4 +103,70 @@ void netservice_remove_all(Netservice *first) {
     netservice_free(first);
 
     netservice_remove_all(next);
+}
+
+int netservice_update_rrs(Netservice *first, const char *hostname) {
+        char *service_name;
+        char *instance_name;
+        Netservice *next;
+        DnsTxtItem *i;
+
+        if (!first)
+                return 0;
+
+        next = first->netservices_next;
+
+        if (first->ptr_rr)
+                first->ptr_rr = dns_resource_record_unref(first->ptr_rr);
+        if (first->srv_rr)
+                first->srv_rr = dns_resource_record_unref(first->srv_rr);
+        if (first->txt_rr)
+                first->txt_rr = dns_resource_record_unref(first->txt_rr);
+
+        service_name = strjoina(first->type, ".local");
+        instance_name = strjoina(first->instance_name, ".", first->type, ".local");
+
+        first->txt_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_TXT,
+                                                     instance_name);
+        if (!first->txt_rr)
+                return log_oom();
+
+        /* RFC 6763, section 6.1 suggests to treat
+         * empty TXT RRs as equivalent to a TXT record
+         * with a single empty string. */
+
+        i = malloc0(offsetof(DnsTxtItem, data) + 1); /* for safety reasons we add an extra NUL byte */
+        if (!i) {
+                first->txt_rr = dns_resource_record_unref(first->txt_rr);
+                return log_oom();
+        }
+
+        first->txt_rr->txt.items = i;
+        first->txt_rr->ttl = MDNS_DEFAULT_TTL;
+
+        first->ptr_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_PTR,
+                                                     service_name);
+        if (!first->ptr_rr) {
+                first->txt_rr = dns_resource_record_unref(first->txt_rr);
+                return log_oom();
+        }
+
+        first->ptr_rr->ttl = MDNS_DEFAULT_TTL;
+        first->ptr_rr->ptr.name = strdup(instance_name);
+
+        first->srv_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_SRV,
+                                                     instance_name);
+        if (!first->srv_rr) {
+                first->txt_rr = dns_resource_record_unref(first->txt_rr);
+                first->ptr_rr = dns_resource_record_unref(first->ptr_rr);
+                return log_oom();
+        }
+
+        first->srv_rr->ttl = MDNS_DEFAULT_TTL;
+        first->srv_rr->srv.priority = 0; /* TODO: add priority to config */
+        first->srv_rr->srv.weight = 0; /* TODO: add weight to config */
+        first->srv_rr->srv.port = first->port;
+        first->srv_rr->srv.name = strdup(hostname);
+
+        return netservice_update_rrs(next, hostname);
 }
