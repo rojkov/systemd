@@ -745,11 +745,6 @@ LinkAddress *link_address_free(LinkAddress *a) {
 }
 
 void link_address_add_rrs(LinkAddress *a, bool force_remove) {
-    char key_str[DNS_RESOURCE_KEY_STRING_MAX];
-        Iterator i;
-        char *service_type;
-        DnsResourceRecord *aux_rr;
-        Netservice *netservice;
         int r;
 
         assert(a);
@@ -810,8 +805,6 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         }
                 }
 
-                log_debug("****** %d %d %p %d %d", (!force_remove), link_address_relevant(a, true), a->link->mdns_ipv4_scope, a->link->mdns_support == RESOLVE_SUPPORT_YES, a->link->manager->mdns_support == RESOLVE_SUPPORT_YES);
-
                 if (!force_remove &&
                     link_address_relevant(a, true) &&
                     a->link->mdns_ipv4_scope &&
@@ -851,44 +844,9 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, a->mdns_ptr_rr, false);
                         if (r < 0)
                                 log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
-
-                        SET_FOREACH(service_type, a->link->manager->netservice_types, i) {
-                            aux_rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_PTR, "_services._dns-sd._udp.local");
-                            aux_rr->ptr.name = strdup(strjoina(service_type, ".local"));
-                            aux_rr->ttl = MDNS_DEFAULT_TTL;
-                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, aux_rr, false);
-                            if (r < 0)
-                                log_warning_errno(r, "Failed to add IPv4 DNS-SD PTR record to MDNS zone: %m");
-                            else
-                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(aux_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, aux_rr, aux_rr->n_ref);
-                            dns_resource_record_unref(aux_rr);
-                            log_debug("now %p has refcount %d", aux_rr, aux_rr->n_ref);
-                        }
-
-                        r = netservice_update_rrs(a->link->manager->netservices,
-                                                  a->link->manager->mdns_hostname);
+                        r = dns_scope_add_netservices(a->link->mdns_ipv4_scope);
                         if (r < 0)
-                                goto fail;
-
-                        LIST_FOREACH(netservices, netservice, a->link->manager->netservices) {
-                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, netservice->ptr_rr, false);
-                            if (r < 0)
-                                log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
-                            else
-                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(netservice->ptr_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, netservice->ptr_rr, netservice->ptr_rr->n_ref);
-
-                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, netservice->srv_rr, true);
-                            if (r < 0)
-                                log_warning_errno(r, "Failed to add IPv4 SRV record to MDNS zone: %m");
-                            else
-                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(netservice->srv_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, netservice->srv_rr, netservice->srv_rr->n_ref);
-
-                            r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, netservice->txt_rr, false);
-                            if (r < 0)
-                                log_warning_errno(r, "Failed to add IPv4 TXT record to MDNS zone: %m");
-                            else
-                                log_debug("Put %s RR to zone %p (%p). refcount: %d", dns_resource_key_to_string(netservice->txt_rr->key, key_str, sizeof key_str), &a->link->mdns_ipv4_scope->zone, netservice->txt_rr, netservice->txt_rr->n_ref);
-                        }
+                                log_warning_errno(r, "Failed to add netservices: %m");
                 } else {
                         if (a->mdns_address_rr) {
                                 if (a->link->mdns_ipv4_scope)
