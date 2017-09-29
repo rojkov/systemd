@@ -1080,6 +1080,7 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
         _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
         LinkAddress *a;
         Netservice *ns;
+        unsigned dnssd_rr_num;
         int r;
 
         if (!scope)
@@ -1088,7 +1089,10 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
         if (scope->protocol != DNS_PROTOCOL_MDNS)
                 return 0;
 
-        answer = dns_answer_new(scope->link->n_addresses * (2 + 6));
+        /* We need 3 rrs (ptr, srv and txt) for every netservice. */
+        dnssd_rr_num = 3 * scope->manager->n_netservices;
+
+        answer = dns_answer_new(scope->link->n_addresses * (2 + dnssd_rr_num));
         if (!answer)
                 return log_oom();
 
