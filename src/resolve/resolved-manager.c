@@ -699,7 +699,7 @@ Manager *manager_free(Manager *m) {
         free(m->llmnr_hostname);
         free(m->mdns_hostname);
 
-        m->netservice_types = set_free_free(m->netservice_types);
+        set_clear_free(m->netservice_types);
         log_debug("Currently there're %d netservices", m->n_netservices);
         netservice_remove_all(m->netservices);
 
