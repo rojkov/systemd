@@ -5654,6 +5654,8 @@ systemd_resolved_SOURCES = \
 	src/resolve/resolved-llmnr.c \
 	src/resolve/resolved-mdns.h \
 	src/resolve/resolved-mdns.c \
+	src/resolve/resolved-dns-netservice.h \
+	src/resolve/resolved-dns-netservice.c \
 	src/resolve/resolved-def.h \
 	$(basic_dns_sources) \
 	src/resolve/resolved-dns-query.h \
@@ -5686,7 +5688,8 @@ systemd_resolved_SOURCES = \
 nodist_systemd_resolved_SOURCES = \
 	src/resolve/dns_type-from-name.h \
 	src/resolve/dns_type-to-name.h \
-	src/resolve/resolved-gperf.c
+	src/resolve/resolved-gperf.c \
+	src/resolve/resolved-dns-netservice-gperf.c
 
 systemd_resolved_CFLAGS = \
 	$(AM_CFLAGS) \
@@ -5871,7 +5874,8 @@ gperf_txt_sources += \
 	src/resolve/dns_type-list.txt
 
 gperf_gperf_sources += \
-	src/resolve/resolved-gperf.gperf
+	src/resolve/resolved-gperf.gperf \
+	src/resolve/resolved-dns-netservice-gperf.gperf
 
 EXTRA_DIST += \
 	units/systemd-resolved.service.m4.in \
