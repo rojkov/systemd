@@ -40,6 +40,7 @@
 #include "random-util.h"
 #include "resolved-bus.h"
 #include "resolved-conf.h"
+#include "resolved-dnssd.h"
 #include "resolved-dns-stub.h"
 #include "resolved-etc-hosts.h"
 #include "resolved-llmnr.h"
@@ -607,6 +608,10 @@ int manager_new(Manager **ret) {
         if (r < 0)
                 log_warning_errno(r, "Failed to parse configuration file: %m");
 
+        r = dnssd_load(m);
+        if (r < 0)
+                log_warning_errno(r, "Failed to load DNS-SD configuration files: %m");
+
         r = sd_event_default(&m->event);
         if (r < 0)
                 return r;
@@ -662,6 +667,7 @@ int manager_start(Manager *m) {
 
 Manager *manager_free(Manager *m) {
         Link *l;
+        DnssdService *s;
 
         if (!m)
                 return NULL;
@@ -717,6 +723,10 @@ Manager *manager_free(Manager *m) {
         free(m->full_hostname);
         free(m->llmnr_hostname);
         free(m->mdns_hostname);
+
+        while ((s = hashmap_first(m->dnssd_services)))
+               dnssd_service_free(s);
+        hashmap_free(m->dnssd_services);
 
         dns_trust_anchor_flush(&m->trust_anchor);
         manager_etc_hosts_flush(m);
