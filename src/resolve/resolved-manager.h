@@ -164,6 +164,7 @@ int manager_find_ifindex(Manager *m, int family, const union in_addr_union *in_a
 LinkAddress* manager_find_link_address(Manager *m, int family, const union in_addr_union *in_addr);
 
 void manager_refresh_rrs(Manager *m);
+int manager_refresh_dnssds(Manager *m);
 int manager_next_hostname(Manager *m);
 
 bool manager_our_packet(Manager *m, DnsPacket *p);

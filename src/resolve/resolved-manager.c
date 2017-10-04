@@ -1117,6 +1117,22 @@ void manager_refresh_rrs(Manager *m) {
         }
 }
 
+int manager_refresh_dnssds(Manager *m) {
+        Iterator i;
+        DnssdService *s;
+        int r;
+
+        assert(m);
+
+        HASHMAP_FOREACH(s, m->dnssd_services, i) {
+                r = dnssd_update_rrs(s, m->mdns_hostname);
+                if (r < 0)
+                        return r;
+        }
+
+        return 0;
+}
+
 int manager_next_hostname(Manager *m) {
         const char *p;
         uint64_t u, a;
