@@ -31,6 +31,7 @@
 typedef struct Manager Manager;
 
 #include "resolved-conf.h"
+#include "resolved-dns-netservice.h"
 #include "resolved-dns-query.h"
 #include "resolved-dns-search-domain.h"
 #include "resolved-dns-server.h"
@@ -100,6 +101,11 @@ struct Manager {
         /* mDNS */
         int mdns_ipv4_fd;
         int mdns_ipv6_fd;
+
+        /* DNS-SD */
+        Set *netservice_types;
+        LIST_HEAD(DnsNetservice, netservices);
+        unsigned n_netservices;
 
         sd_event_source *mdns_ipv4_event_source;
         sd_event_source *mdns_ipv6_event_source;

@@ -18,6 +18,8 @@ systemd_resolved_only_sources = files('''
         resolved.c
         resolved-manager.c
         resolved-manager.h
+        resolved-dns-netservice.c
+        resolved-dns-netservice.h
         resolved-conf.c
         resolved-conf.h
         resolved-resolv-conf.c
@@ -114,8 +116,14 @@ resolved_gperf_c = custom_target(
         output : 'resolved-gperf.c',
         command : [gperf, '@INPUT@', '--output-file', '@OUTPUT@'])
 
+resolved_netservice_gperf_c = custom_target(
+        'resolved_netservice_gperf.c',
+        input : 'resolved-dns-netservice-gperf.gperf',
+        output : 'resolved-dns-netservice-gperf.c',
+        command : [gperf, '@INPUT@', '--output-file', '@OUTPUT@'])
+
 systemd_resolved_sources = (basic_dns_sources +
-                            [resolved_gperf_c] +
+                            [resolved_gperf_c, resolved_netservice_gperf_c] +
                             systemd_resolved_only_sources +
                             dns_type_headers)
 
