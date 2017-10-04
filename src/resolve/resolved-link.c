@@ -844,7 +844,17 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         r = dns_zone_put(&a->link->mdns_ipv4_scope->zone, a->link->mdns_ipv4_scope, a->mdns_ptr_rr, false);
                         if (r < 0)
                                 log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
+
+                        r = dns_scope_add_netservices(a->link->mdns_ipv4_scope);
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv4 netservices: %m");
                 } else {
+                        if (a->link->mdns_ipv4_scope) {
+                                r = dns_scope_remove_netservices(a->link->mdns_ipv4_scope);
+                                if (r < 0)
+                                        log_warning_errno(r, "Failed to remove IPv4 network services: %m");
+                        }
+
                         if (a->mdns_address_rr) {
                                 if (a->link->mdns_ipv4_scope)
                                         dns_zone_remove_rr(&a->link->mdns_ipv4_scope->zone, a->mdns_address_rr);
@@ -955,7 +965,17 @@ void link_address_add_rrs(LinkAddress *a, bool force_remove) {
                         r = dns_zone_put(&a->link->mdns_ipv6_scope->zone, a->link->mdns_ipv6_scope, a->mdns_ptr_rr, false);
                         if (r < 0)
                                 log_warning_errno(r, "Failed to add IPv6 PTR record to MDNS zone: %m");
+
+                        r = dns_scope_add_netservices(a->link->mdns_ipv6_scope);
+                        if (r < 0)
+                                log_warning_errno(r, "Failed to add IPv6 netservices: %m");
                 } else {
+                        if (a->link->mdns_ipv6_scope) {
+                                r = dns_scope_remove_netservices(a->link->mdns_ipv6_scope);
+                                if (r < 0)
+                                        log_warning_errno(r, "Failed to remove IPv6 network services: %m");
+                        }
+
                         if (a->mdns_address_rr) {
                                 if (a->link->mdns_ipv6_scope)
                                         dns_zone_remove_rr(&a->link->mdns_ipv6_scope->zone, a->mdns_address_rr);

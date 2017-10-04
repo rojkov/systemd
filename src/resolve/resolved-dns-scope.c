@@ -39,6 +39,8 @@
 #define MULTICAST_RESEND_TIMEOUT_MIN_USEC (100 * USEC_PER_MSEC)
 #define MULTICAST_RESEND_TIMEOUT_MAX_USEC (1 * USEC_PER_SEC)
 
+static const char *dnssd_services_keyname = "_services._dns-sd._udp.local";
+
 int dns_scope_new(Manager *m, DnsScope **ret, Link *l, DnsProtocol protocol, int family) {
         DnsScope *s;
 
@@ -1125,6 +1127,76 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
                         return log_debug_errno(r, "Failed to schedule second announcement: %m");
 
                 (void) sd_event_source_set_description(scope->announce_event_source, "mdns-announce");
+        }
+
+        return 0;
+}
+
+int dns_scope_add_netservices(DnsScope *scope) {
+        Iterator i;
+        char *service_type;
+        DnsNetservice *netservice;
+        int r;
+
+        assert(scope);
+
+        r = dns_netservice_update_rrs(scope->manager->netservices,
+                                      scope->manager->mdns_hostname);
+        if (r < 0)
+                return r;
+
+        LIST_FOREACH(netservices, netservice, scope->manager->netservices) {
+                r = dns_zone_put(&scope->zone, scope, netservice->ptr_rr, false);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to add IPv4 PTR record to MDNS zone: %m");
+
+                r = dns_zone_put(&scope->zone, scope, netservice->srv_rr, true);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to add IPv4 SRV record to MDNS zone: %m");
+
+                r = dns_zone_put(&scope->zone, scope, netservice->txt_rr, false);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to add IPv4 TXT record to MDNS zone: %m");
+        }
+
+        /* As services are in the zone now make them discoverable. */
+        SET_FOREACH(service_type, scope->manager->netservice_types, i) {
+                _cleanup_(dns_resource_record_unrefp) DnsResourceRecord *rr;
+
+                rr = dns_resource_record_new_full(DNS_CLASS_IN, DNS_TYPE_PTR,
+                                                  dnssd_services_keyname);
+                rr->ptr.name = strjoin(service_type, ".local");
+                if (!rr->ptr.name)
+                        return log_oom();
+                rr->ttl = MDNS_DEFAULT_TTL;
+                r = dns_zone_put(&scope->zone, scope, rr, false);
+                if (r < 0)
+                        log_warning_errno(r, "Failed to add IPv4 DNS-SD PTR record to MDNS zone: %m");
+        }
+
+        return 0;
+}
+
+int dns_scope_remove_netservices(DnsScope *scope) {
+        _cleanup_(dns_resource_key_unrefp) DnsResourceKey *key = NULL;
+        DnsNetservice *netservice;
+        int r;
+
+        assert(scope);
+
+        key = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_PTR,
+                                   dnssd_services_keyname);
+        if (!key)
+                return log_oom();
+
+        r = dns_zone_remove_rrs_by_key(&scope->zone, key);
+        if (r < 0)
+                return r;
+
+        LIST_FOREACH(netservices, netservice, scope->manager->netservices) {
+                dns_zone_remove_rr(&scope->zone, netservice->ptr_rr);
+                dns_zone_remove_rr(&scope->zone, netservice->srv_rr);
+                dns_zone_remove_rr(&scope->zone, netservice->txt_rr);
         }
 
         return 0;

@@ -28,3 +28,4 @@ struct DnsNetservice {
 
 int dns_netservice_load(Manager *manager);
 void dns_netservice_remove_all(DnsNetservice *first);
+int dns_netservice_update_rrs(DnsNetservice *first, const char *hostname);
