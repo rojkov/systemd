@@ -1082,11 +1082,13 @@ int dns_scope_announce(DnsScope *scope, bool goodbye) {
                 return log_oom();
 
         LIST_FOREACH(addresses, a, scope->link->addresses) {
-                r = dns_answer_add(answer, a->mdns_address_rr, 0, goodbye ? DNS_ANSWER_GOODBYE : DNS_ANSWER_CACHE_FLUSH);
+                DnsAnswerFlags flags = goodbye ? DNS_ANSWER_GOODBYE : DNS_ANSWER_CACHE_FLUSH;
+
+                r = dns_answer_add(answer, a->mdns_address_rr, 0, flags);
                 if (r < 0)
                         return log_debug_errno(r, "Failed to add address RR to answer: %m");
 
-                r = dns_answer_add(answer, a->mdns_ptr_rr, 0, goodbye ? DNS_ANSWER_GOODBYE : DNS_ANSWER_CACHE_FLUSH);
+                r = dns_answer_add(answer, a->mdns_ptr_rr, 0, flags);
                 if (r < 0)
                         return log_debug_errno(r, "Failed to add PTR RR to answer: %m");
         }
