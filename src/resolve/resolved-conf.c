@@ -21,6 +21,7 @@
 #include "conf-parser.h"
 #include "def.h"
 #include "extract-word.h"
+#include "hostname-util.h"
 #include "parse-util.h"
 #include "resolved-conf.h"
 #include "string-table.h"
@@ -223,6 +224,105 @@ int config_parse_search_domains(
         /* If we have a manual setting, then we stop reading
          * /etc/resolv.conf */
         m->read_resolv_conf = false;
+
+        return 0;
+}
+
+int config_parse_dns_netservice_name(const char *unit, const char *filename, unsigned line, const char *section, unsigned section_line, const char *lvalue, int ltype, const char *rvalue, void *data, void *userdata) {
+        DnsNetservice *ns = userdata;
+        _cleanup_free_ char *instance_name = NULL;
+        int r;
+
+        assert(filename);
+        assert(lvalue);
+        assert(rvalue);
+        assert(ns);
+
+        if (isempty(rvalue)) {
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service instance name can't be empty. Ignoring.");
+                return r;
+        }
+
+        if (strstr(rvalue, "%h")) {
+                _cleanup_free_ char *hostname = NULL;
+
+                r = gethostname_strict(&hostname);
+                if (r < 0) {
+                        log_warning_errno(r, "Can't get hostname for network service: %m. Ignoring.");
+                        return r;
+                }
+                instance_name = strreplace(rvalue, "%h", hostname);
+        } else
+                instance_name = strdup(rvalue);
+
+        if (!instance_name)
+                return log_oom();
+
+        /* Instance names can't be longer than 63 octets. See RFC6763 p.4.4.1. */
+        if (strlen(instance_name) > 63) {
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service instance name '%s' is too long. Ignoring.", instance_name);
+                return r;
+        }
+
+        ns->instance_name = instance_name;
+        instance_name = NULL;
+
+        return 0;
+}
+
+int config_parse_dns_netservice_type(const char *unit, const char *filename, unsigned line, const char *section, unsigned section_line, const char *lvalue, int ltype, const char *rvalue, void *data, void *userdata) {
+        _cleanup_free_ char *srvlabel = NULL;
+        _cleanup_free_ char *proto = NULL;
+        DnsNetservice *ns = userdata;
+        int r;
+
+        assert(filename);
+        assert(lvalue);
+        assert(rvalue);
+        assert(ns);
+
+        if (isempty(rvalue)) {
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service type can't be empty. Ignoring.");
+                return r;
+        }
+
+        r = split_pair(rvalue, ".", &srvlabel, &proto);
+        if (r < 0) {
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service type must be 2 labels separated with a dot. Ignoring.");
+                return r;
+        }
+
+        if ((strcmp(proto, "_udp") != 0) && (strcmp(proto, "_tcp") != 0)) {
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service type's second label must be either '_udp' or '_tcp'. Ignoring.");
+                return r;
+        }
+
+        if (srvlabel[0] != '_') {
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service type's first label must start with an underscore. Ignoring.");
+                return r;
+        }
+
+        if (strlen(srvlabel) > 16) {
+                /* According to RFC6335 service names must be no more than 15 characters long (plus a leading underscore). */
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service type's first label cannot be longer than 16 characters. Ignoring.");
+                return r;
+        }
+
+        if (!chars_intersect(srvlabel, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")) {
+                r = -EINVAL;
+                log_syntax(unit, LOG_ERR, filename, line, r, "Service type's first label must contain at least one letter. Ignoring.");
+                return r;
+        }
+
+        ns->type = strdup(rvalue);
+        if (!ns->type)
+                return log_oom();
 
         return 0;
 }
