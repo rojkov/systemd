@@ -48,4 +48,5 @@ DEFINE_TRIVIAL_CLEANUP_FUNC(DnssdService*, dnssd_service_free);
 
 int dnssd_render_instance_name(DnssdService *s, char **ret_name);
 int dnssd_load(Manager *manager);
+int dnssd_update_rrs(DnssdService *s);
 int dnssd_txt_item_new(const char *key, const char *value, DnsTxtItem **ret_item);
