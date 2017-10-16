@@ -1376,7 +1376,11 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
         _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
         bool add_known_answers = false;
         DnsTransaction *other;
+        Iterator i;
+        DnsResourceKey *tkey;
+        _cleanup_set_free_ Set *keys = NULL;
         unsigned qdcount;
+        unsigned nscount = 0;
         usec_t ts;
         int r;
 
@@ -1398,6 +1402,16 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
 
         if (dns_key_is_shared(t->key))
                 add_known_answers = true;
+
+        if (t->key->type == DNS_TYPE_ANY) {
+                r = set_ensure_allocated(&keys, NULL);
+                if (r < 0)
+                        return r;
+
+                r = set_put(keys, t->key);
+                if (r < 0)
+                        return r;
+        }
 
         /*
          * For mDNS, we want to coalesce as many open queries in pending transactions into one single
@@ -1458,6 +1472,16 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
 
                 if (dns_key_is_shared(other->key))
                         add_known_answers = true;
+
+                if (other->key->type == DNS_TYPE_ANY) {
+                        r = set_ensure_allocated(&keys, NULL);
+                        if (r < 0)
+                                return r;
+
+                        r = set_put(keys, other->key);
+                        if (r < 0)
+                                return r;
+                }
         }
 
         DNS_PACKET_HEADER(p)->qdcount = htobe16(qdcount);
@@ -1468,6 +1492,19 @@ static int dns_transaction_make_packet_mdns(DnsTransaction *t) {
                 if (r < 0)
                         return r;
         }
+
+        SET_FOREACH(tkey, keys, i) {
+                _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
+                bool tentative;
+
+                r = dns_zone_lookup(&t->scope->zone, tkey, t->scope->link->ifindex, &answer, NULL, &tentative);
+                if (r < 0)
+                        return r;
+
+                r = dns_packet_append_answer(p, answer);
+                nscount += dns_answer_size(answer);
+        }
+        DNS_PACKET_HEADER(p)->nscount = htobe16(nscount);
 
         t->sent = p;
         p = NULL;
