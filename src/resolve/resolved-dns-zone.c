@@ -94,7 +94,7 @@ void dns_zone_flush(DnsZone *z) {
         z->by_name = hashmap_free(z->by_name);
 }
 
-static DnsZoneItem* dns_zone_get(DnsZone *z, DnsResourceRecord *rr) {
+DnsZoneItem* dns_zone_get(DnsZone *z, DnsResourceRecord *rr) {
         DnsZoneItem *i;
 
         assert(z);
