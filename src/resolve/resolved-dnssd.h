@@ -40,6 +40,8 @@ struct DnssdService {
         DnsResourceRecord *txt_rr;
 
         Manager *manager;
+
+        bool withdrawn:1;
 };
 
 DnssdService *dnssd_service_free(DnssdService *service);
@@ -49,3 +51,4 @@ DEFINE_TRIVIAL_CLEANUP_FUNC(DnssdService*, dnssd_service_free);
 int dnssd_load(Manager *manager);
 int dnssd_update_rrs(DnssdService *first, const char *hostname);
 int dnssd_txt_item_new(const char *key, const char *value, DnsTxtItem **ret_item);
+void dnssd_signal_conflict(Manager *manager, const char *name);

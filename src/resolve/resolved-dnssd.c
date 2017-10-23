@@ -239,3 +239,40 @@ int dnssd_txt_item_new(const char *key, const char *value, DnsTxtItem **ret_item
 
         return 0;
 }
+
+void dnssd_signal_conflict(Manager *manager, const char *name) {
+        Iterator i;
+        DnssdService *s;
+        int r;
+
+        HASHMAP_FOREACH(s, manager->dnssd_services, i) {
+                if (s->withdrawn)
+                        continue;
+
+                if (dns_name_equal(dns_resource_key_name(s->srv_rr->key), name)) {
+                        _cleanup_free_ char *path = NULL;
+
+                        /* TODO: schedule service re-activation with a different name. */
+                        s->withdrawn = true;
+
+                        r = sd_bus_path_encode("/org/freedesktop/resolve1/dnssd", s->name, &path);
+                        if (r < 0) {
+                                log_error_errno(r, "Can't get D-BUS object path: %m");
+                                return;
+                        }
+
+                        r = sd_bus_emit_signal(manager->bus,
+                                               "/org/freedesktop/resolve1",
+                                               "org.freedesktop.resolve1.DnssdService",
+                                               "Conflicted",
+                                               "o",
+                                               path);
+                        if (r < 0) {
+                                log_error_errno(r, "Cannot emit signal: %m");
+                                return;
+                        }
+
+                        break;
+                }
+        }
+}
