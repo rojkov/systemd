@@ -25,6 +25,8 @@
 #include "resolved-def.h"
 #include "resolved-dns-synthesize.h"
 #include "resolved-link-bus.h"
+#include "resolved-dnssd-bus.h"
+#include "utf8.h"
 
 static int reply_query_state(DnsQuery *q) {
 
@@ -1580,6 +1582,132 @@ static int bus_method_reset_server_features(sd_bus_message *message, void *userd
         return sd_bus_reply_method_return(message, NULL);
 }
 
+static int bus_method_register_service(sd_bus_message *message, void *userdata, sd_bus_error *error) {
+        _cleanup_(dnssd_service_freep) DnssdService *service = NULL;
+        _cleanup_free_ char *path = NULL;
+        _cleanup_free_ char *instance_name = NULL;
+        Manager *m = userdata;
+        DnssdService *s = NULL;
+        DnsTxtItem *last = NULL;
+        int r;
+
+        assert(message);
+        assert(m);
+
+        if (m->mdns_support != RESOLVE_SUPPORT_YES)
+                return sd_bus_error_set_errno(error, EPROTONOSUPPORT);
+
+        service = new0(DnssdService, 1);
+        if (!service)
+                return sd_bus_error_set_errno(error, ENOMEM);
+        service->manager = m;
+
+        r = sd_bus_message_read(message, "sssqqq", &service->name,
+                                &service->name_tpl,
+                                &service->type, &service->port,
+                                &service->priority, &service->weight);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        s = hashmap_get(m->dnssd_services, service->name);
+        if (s)
+                return sd_bus_error_setf(error, BUS_ERROR_DNSSD_SERVICE_EXISTS, "DNS-SD service '%s' exists already", service->name);
+
+        r = dnssd_render_instance_name(service, &instance_name);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        if (!dnssd_srv_type_is_valid(service->type))
+                return sd_bus_error_set_errno(error, EINVAL);
+
+        r = sd_bus_message_enter_container(message, SD_BUS_TYPE_ARRAY, "{ss}");
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        while ((r = sd_bus_message_enter_container(message, SD_BUS_TYPE_DICT_ENTRY, "ss")) > 0) {
+                const char *key, *value;
+                DnsTxtItem *i;
+
+                r = sd_bus_message_read(message, "ss", &key, &value);
+                if (r < 0)
+                        return sd_bus_error_set_errno(error, -r);
+
+                if (strlen_ptr(key) == 0)
+                        return sd_bus_error_set_errno(error, EINVAL);
+
+                if (!ascii_is_valid(key))
+                        return sd_bus_error_set_errno(error, EINVAL);
+
+                r = dnssd_txt_item_new(key, value, &i);
+                if (r < 0)
+                        return sd_bus_error_set_errno(error, -r);
+
+                LIST_INSERT_AFTER(items, service->txt, last, i);
+                last = i;
+        }
+
+        r = sd_bus_message_exit_container(message);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        if (!service->txt)
+                service->txt = malloc0(offsetof(DnsTxtItem, data) + 1); /* for safety reasons we add an extra NUL byte */
+        if (!service->txt)
+                return sd_bus_error_set_errno(error, ENOMEM);
+
+        r = hashmap_ensure_allocated(&m->dnssd_services, &string_hash_ops);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        r = hashmap_put(m->dnssd_services, service->name, service);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        r = sd_bus_path_encode("/org/freedesktop/resolve1/dnssd", service->name, &path);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        service = NULL;
+
+        manager_refresh_rrs(m);
+
+        return sd_bus_reply_method_return(message, "o", path);
+}
+
+static int call_dnssd_method(Manager *m, sd_bus_message *message, sd_bus_message_handler_t handler, sd_bus_error *error) {
+        _cleanup_free_ char *name = NULL;
+        DnssdService *s = NULL;
+        const char *path;
+        int r;
+
+        assert(m);
+        assert(message);
+        assert(handler);
+
+        r = sd_bus_message_read(message, "o", &path);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, -r);
+
+        r = sd_bus_path_decode(path, "/org/freedesktop/resolve1/dnssd", &name);
+        if (r <= 0)
+                return ENOMEM;
+
+        s = hashmap_get(m->dnssd_services, name);
+        if (!s)
+                return sd_bus_error_setf(error, BUS_ERROR_NO_SUCH_DNSSD_SERVICE, "DNS-SD service %s not known", name);
+
+        return handler(message, s, error);
+}
+
+static int bus_method_unregister_service(sd_bus_message *message, void *userdata, sd_bus_error *error) {
+        Manager *m = userdata;
+
+        assert(message);
+        assert(m);
+
+        return call_dnssd_method(m, message, bus_dnssd_method_unregister, error);
+}
+
 static const sd_bus_vtable resolve_vtable[] = {
         SD_BUS_VTABLE_START(0),
         SD_BUS_PROPERTY("LLMNRHostname", "s", NULL, offsetof(Manager, llmnr_hostname), 0),
@@ -1608,6 +1736,8 @@ static const sd_bus_vtable resolve_vtable[] = {
         SD_BUS_METHOD("SetLinkDNSSECNegativeTrustAnchors", "ias", NULL, bus_method_set_link_dnssec_negative_trust_anchors, 0),
         SD_BUS_METHOD("RevertLink", "i", NULL, bus_method_revert_link, 0),
 
+        SD_BUS_METHOD("RegisterService", "sssqqqa{ss}", "o", bus_method_register_service, 0),
+        SD_BUS_METHOD("UnregisterService", "o", NULL, bus_method_unregister_service, 0),
         SD_BUS_VTABLE_END,
 };
 
@@ -1679,6 +1809,14 @@ int manager_connect_bus(Manager *m) {
         r = sd_bus_add_node_enumerator(m->bus, NULL, "/org/freedesktop/resolve1/link", link_node_enumerator, m);
         if (r < 0)
                 return log_error_errno(r, "Failed to register link enumerator: %m");
+
+        r = sd_bus_add_fallback_vtable(m->bus, NULL, "/org/freedesktop/resolve1/dnssd", "org.freedesktop.resolve1.DnssdService", dnssd_vtable, dnssd_object_find, m);
+        if (r < 0)
+                return log_error_errno(r, "Failed to register dnssd objects: %m");
+
+        r = sd_bus_add_node_enumerator(m->bus, NULL, "/org/freedesktop/resolve1/dnssd", dnssd_node_enumerator, m);
+        if (r < 0)
+                return log_error_errno(r, "Failed to register dnssd enumerator: %m");
 
         r = sd_bus_request_name(m->bus, "org.freedesktop.resolve1", 0);
         if (r < 0)
