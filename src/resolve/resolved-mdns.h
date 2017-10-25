@@ -29,3 +29,4 @@ int manager_mdns_ipv6_fd(Manager *m);
 
 void manager_mdns_stop(Manager *m);
 int manager_mdns_start(Manager *m);
+int mdns_scope_process_query(DnsScope *s, DnsPacket *p);
