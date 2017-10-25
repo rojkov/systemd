@@ -199,7 +199,7 @@ static int mdns_do_tiebreak(DnsResourceKey *key, DnsAnswer *answer, DnsPacket *p
         return 0;
 }
 
-static int mdns_scope_process_query(DnsScope *s, DnsPacket *p) {
+int mdns_scope_process_query(DnsScope *s, DnsPacket *p) {
         _cleanup_(dns_answer_unrefp) DnsAnswer *full_answer = NULL;
         _cleanup_(dns_packet_unrefp) DnsPacket *reply = NULL;
         DnsResourceKey *key = NULL;

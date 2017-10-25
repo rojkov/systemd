@@ -28,6 +28,7 @@
 #include "resolved-dns-cache.h"
 #include "resolved-dns-transaction.h"
 #include "resolved-llmnr.h"
+#include "resolved-mdns.h"
 #include "string-table.h"
 
 #define TRANSACTIONS_MAX 4096
@@ -1541,6 +1542,86 @@ static int dns_transaction_make_packet(DnsTransaction *t) {
         return 0;
 }
 
+static int on_test_event(sd_event_source *s, usec_t usec, void *userdata) {
+        DnsTransaction *t = userdata;
+        _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL, *test_answer = NULL;
+        bool tentative;
+        _cleanup_(dns_packet_unrefp) DnsPacket *p = NULL;
+        _cleanup_(dns_resource_key_unrefp) DnsResourceKey *key = NULL;
+        DnsResourceRecord *rr;
+        unsigned qdcount = 1;
+        unsigned nscount = 0;
+        int r;
+
+        sd_event_source_unref(s);
+        log_info("*** BOOM!");
+
+        r = dns_packet_new_query(&p, DNS_PROTOCOL_MDNS, 0, false);
+        if (r < 0) {
+                log_error("OOPS");
+                return r;
+        }
+
+        key = dns_resource_key_new(DNS_CLASS_IN, DNS_TYPE_ANY, "fedoraroot._ssh._tcp.local");
+        if (!key) {
+                log_error("OOPS");
+                return -ENOMEM;
+        }
+
+        r = dns_packet_append_key(p, key, 0, NULL);
+        if (r < 0) {
+                log_error("OOPS");
+                return r;
+        }
+
+        DNS_PACKET_HEADER(p)->qdcount = htobe16(qdcount);
+
+        r = dns_zone_lookup(&t->scope->zone, key, 0, &answer, NULL, &tentative);
+        if (r < 0) {
+                log_error("OOPS");
+                return r;
+        }
+
+        test_answer = dns_answer_new(dns_answer_size(answer));
+        unsigned i = 0;
+        DNS_ANSWER_FOREACH(rr, answer) {
+                _cleanup_(dns_resource_record_unrefp) DnsResourceRecord *rr2;
+                rr2 = dns_resource_record_copy(rr);
+                if (!rr2) {
+                        log_error("OOPS");
+                        return -ENOMEM;
+                }
+                if (rr2->key->type == DNS_TYPE_SRV) {
+                        rr2->srv.port = 2223;
+                        log_info("Port to %d", rr2->srv.port);
+                }
+                r = dns_answer_add(test_answer, rr2, t->scope->link->ifindex, 0);
+                if (r < 0) {
+                        log_error("OOPS");
+                        return r;
+                }
+                i++;
+        }
+
+        r = dns_packet_append_answer(p, test_answer);
+        nscount += dns_answer_size(test_answer);
+
+        DNS_PACKET_HEADER(p)->nscount = htobe16(nscount);
+        log_info("Added %d RRs to Authority Section", nscount);
+
+        if (dns_packet_validate_query(p) > 0)  {
+                log_debug("Got mDNS query packet for id %u", DNS_PACKET_ID(p));
+
+                r = mdns_scope_process_query(t->scope, p);
+                if (r < 0) {
+                        log_debug_errno(r, "mDNS query processing failed: %m");
+                        return 0;
+                }
+        }
+
+        return 0;
+}
+
 int dns_transaction_go(DnsTransaction *t) {
         usec_t ts;
         int r;
@@ -1675,6 +1756,16 @@ int dns_transaction_go(DnsTransaction *t) {
 
         t->state = DNS_TRANSACTION_PENDING;
         t->next_attempt_after = ts;
+
+        if (t->n_attempts == 1) {
+                sd_event_source *es;
+                sd_event_add_time(
+                                t->scope->manager->event,
+                                &es,
+                                clock_boottime_or_monotonic(),
+                                0, 0,
+                                on_test_event, t);
+        }
 
         return 1;
 }
