@@ -18,9 +18,11 @@
 ***/
 
 #include "alloc-util.h"
+#include "bus-util.h"
 #include "resolved-dnssd-bus.h"
 #include "resolved-link.h"
 #include "strv.h"
+#include "user-util.h"
 
 int bus_dnssd_method_unregister(sd_bus_message *message, void *userdata, sd_bus_error *error) {
         DnssdService *s = userdata;
@@ -33,6 +35,15 @@ int bus_dnssd_method_unregister(sd_bus_message *message, void *userdata, sd_bus_
         assert(s);
 
         m = s->manager;
+
+        r = bus_verify_polkit_async(message, CAP_SYS_ADMIN,
+                                    "org.freedesktop.resolve1.unregister-service",
+                                    NULL, false, s->originator,
+                                    &m->polkit_registry, error);
+        if (r < 0)
+                return sd_bus_error_set_errno(error, r);
+        if (r == 0)
+                return 1; /* Polkit will call us back */
 
         HASHMAP_FOREACH(l, m->links, i) {
                 if (l->mdns_ipv4_scope) {
@@ -66,7 +77,7 @@ int bus_dnssd_method_unregister(sd_bus_message *message, void *userdata, sd_bus_
 const sd_bus_vtable dnssd_vtable[] = {
         SD_BUS_VTABLE_START(0),
 
-        SD_BUS_METHOD("Unregister", NULL, NULL, bus_dnssd_method_unregister, 0),
+        SD_BUS_METHOD("Unregister", NULL, NULL, bus_dnssd_method_unregister, SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_SIGNAL("Conflicted", "o", 0),
 
         SD_BUS_VTABLE_END
