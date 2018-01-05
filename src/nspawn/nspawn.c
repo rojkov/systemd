@@ -414,6 +414,21 @@ static void parse_mount_settings_env(void) {
         SET_FLAG(arg_mount_settings, MOUNT_APPLY_APIVFS_NETNS, false);
 }
 
+static int parse_oci_image_config(const char *path) {
+        _cleanup_free_ char *content = NULL;
+        size_t size;
+        int r;
+
+        log_info("The OCI path is %s", path);
+        r = read_full_file(path, &content, &size);
+        if (r < 0) {
+                log_error_errno(r, "Failed to parse OCI image config %s: %m.", path);
+                return r;
+        }
+
+        return 0;
+}
+
 static int parse_argv(int argc, char *argv[]) {
 
         enum {
@@ -452,6 +467,7 @@ static int parse_argv(int argc, char *argv[]) {
                 ARG_NOTIFY_READY,
                 ARG_ROOT_HASH,
                 ARG_SYSTEM_CALL_FILTER,
+                ARG_OCI_IMAGE,
         };
 
         static const struct option options[] = {
@@ -505,6 +521,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "notify-ready",           required_argument, NULL, ARG_NOTIFY_READY           },
                 { "root-hash",              required_argument, NULL, ARG_ROOT_HASH              },
                 { "system-call-filter",     required_argument, NULL, ARG_SYSTEM_CALL_FILTER     },
+                { "oci-image",              required_argument, NULL, ARG_OCI_IMAGE              }, /* not documented */
                 {}
         };
 
@@ -1106,6 +1123,19 @@ static int parse_argv(int argc, char *argv[]) {
                         }
 
                         arg_settings_mask |= SETTING_SYSCALL_FILTER;
+                        break;
+                }
+
+                case ARG_OCI_IMAGE: {
+                        char *oci_image_path = NULL;
+
+                        r = parse_path_argument_and_warn(optarg, false, &oci_image_path);
+                        if (r < 0)
+                                return r;
+
+                        r = parse_oci_image_config(oci_image_path);
+                        if (r < 0)
+                                return r;
                         break;
                 }
 
