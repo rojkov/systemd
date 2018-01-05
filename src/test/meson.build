@@ -154,6 +154,10 @@ tests += [
          [],
          []],
 
+        [['src/test/test-json.c'],
+         [],
+         []],
+
         [['src/test/test-capability.c'],
          [],
          [libcap]],

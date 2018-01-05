@@ -112,6 +112,8 @@ basic_sources = files('''
         ioprio.h
         journal-importer.c
         journal-importer.h
+        json.c
+        json.h
         khash.c
         khash.h
         label.c
@@ -315,6 +317,7 @@ libbasic = static_library(
         dependencies : [threads,
                         libcap,
                         libblkid,
+                        libm,
                         libselinux],
         c_args : ['-fvisibility=default'],
         install : false)
