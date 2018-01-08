@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <grp.h>
+#include <libgen.h>
 #include <linux/loop.h>
 #include <pwd.h>
 #include <sched.h>
@@ -59,6 +60,7 @@
 #include "dev-setup.h"
 #include "dissect-image.h"
 #include "env-util.h"
+#include "json.h"
 #include "fd-util.h"
 #include "fdset.h"
 #include "fileio.h"
@@ -416,14 +418,54 @@ static void parse_mount_settings_env(void) {
 
 static int parse_oci_image_config(const char *path) {
         _cleanup_free_ char *content = NULL;
+        _cleanup_json_variant_unref_ JsonVariant *jv = NULL;
         size_t size;
         int r;
 
         log_info("The OCI path is %s", path);
         r = read_full_file(path, &content, &size);
         if (r < 0) {
-                log_error_errno(r, "Failed to parse OCI image config %s: %m.", path);
+                log_error_errno(r, "Failed to read OCI image config %s: %m.", path);
                 return r;
+        }
+
+        r = json_parse(content, &jv);
+        if (r < 0) {
+                log_error_errno(r, "Failed to parse OCI image config %s: %m", path);
+                return r;
+        }
+
+        if (!arg_directory) {
+                _cleanup_free_ char *image_dir = NULL;
+                JsonVariant *root, *root_path;
+                const char *p;
+
+                log_debug("Directory is not overriden. Getting it from the image config");
+
+                root = json_variant_value(jv, "root");
+                if (!root || root->type != JSON_VARIANT_OBJECT) {
+                        log_error("The image config lacks required object field 'root'");
+                        return -EINVAL;
+                }
+
+                root_path = json_variant_value(root, "path");
+                if (!root_path || root_path->type != JSON_VARIANT_STRING) {
+                        log_error("No path defined for image root");
+                        return -EINVAL;
+                }
+
+                p = json_variant_string(root_path);
+                assert(p);
+
+                image_dir = dirname_malloc(path);
+                if (!image_dir)
+                        return log_oom();
+
+                arg_directory = path_make_absolute(p, image_dir);
+                if (!arg_directory)
+                        return log_oom();
+
+                log_debug("Set -D=%s", arg_directory);
         }
 
         return 0;
