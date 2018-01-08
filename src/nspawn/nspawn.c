@@ -419,7 +419,7 @@ static void parse_mount_settings_env(void) {
 static int parse_oci_image_config(const char *path) {
         _cleanup_free_ char *content = NULL;
         _cleanup_json_variant_unref_ JsonVariant *jv = NULL;
-        JsonVariant *root, *root_path, *process, *args;
+        JsonVariant *root, *root_path, *process, *args, *env, *cwd;
         size_t size;
         unsigned i;
         int r;
@@ -503,6 +503,73 @@ static int parse_oci_image_config(const char *path) {
 
         log_debug("Arguments:");
         strv_print(arg_parameters);
+
+        env = json_variant_value(process, "env");
+        if (env) {
+
+                if (env->type != JSON_VARIANT_ARRAY) {
+                        log_error("Wrong env format");
+                        return -EINVAL;
+                }
+
+                for (i = 0; i < env->size; ++i) {
+                        JsonVariant *e;
+                        char *optarg;
+                        char **n;
+
+                        e = json_variant_element(env, i);
+                        if (!e || e->type != JSON_VARIANT_STRING) {
+                                log_error("Wrong env format");
+                                return -EINVAL;
+                        }
+
+                        optarg = json_variant_string(e);
+                        assert(optarg);
+
+                        // TODO: this block is identical to switch's case
+
+                        if (!env_assignment_is_valid(optarg)) {
+                                log_error("Environment variable assignment '%s' is not valid.", optarg);
+                                return -EINVAL;
+                        }
+
+                        n = strv_env_set(arg_setenv, optarg);
+                        if (!n)
+                                return log_oom();
+
+                        strv_free(arg_setenv);
+                        arg_setenv = n;
+
+                        arg_settings_mask |= SETTING_ENVIRONMENT;
+                }
+        }
+
+        log_debug("Environment:");
+        strv_print(arg_setenv);
+
+        cwd = json_variant_value(process, "cwd");
+        if (cwd) {
+                char *cwd_arg;
+
+                if (cwd->type != JSON_VARIANT_STRING) {
+                        log_error("Wrong cwd format");
+                        return -EINVAL;
+                }
+
+                cwd_arg = json_variant_string(cwd);
+
+                if (!path_is_absolute(cwd_arg)) {
+                        log_error("Working directory %s is not an absolute path.", optarg);
+                        return -EINVAL;
+                }
+
+                arg_chdir = strdup(cwd_arg);
+                if (!arg_chdir)
+                        return log_oom();
+
+                arg_settings_mask |= SETTING_WORKING_DIRECTORY;
+        }
+        log_debug("CWD set to %s", arg_chdir);
 
         return 0;
 }
@@ -1327,6 +1394,8 @@ static int parse_argv(int argc, char *argv[]) {
 
                 arg_settings_mask |= SETTING_START_MODE;
         }
+        log_debug("Final arguments:");
+        strv_print(arg_parameters);
 
         /* Load all settings from .nspawn files */
         if (mask_no_settings)
