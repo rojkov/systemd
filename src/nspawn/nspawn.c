@@ -419,7 +419,9 @@ static void parse_mount_settings_env(void) {
 static int parse_oci_image_config(const char *path) {
         _cleanup_free_ char *content = NULL;
         _cleanup_json_variant_unref_ JsonVariant *jv = NULL;
+        JsonVariant *root, *root_path, *process, *args;
         size_t size;
+        unsigned i;
         int r;
 
         log_info("The OCI path is %s", path);
@@ -437,14 +439,13 @@ static int parse_oci_image_config(const char *path) {
 
         if (!arg_directory) {
                 _cleanup_free_ char *image_dir = NULL;
-                JsonVariant *root, *root_path;
                 const char *p;
 
-                log_debug("Directory is not overriden. Getting it from the image config");
+                log_debug("Directory is not overriden. Getting it from the OCI container config");
 
                 root = json_variant_value(jv, "root");
                 if (!root || root->type != JSON_VARIANT_OBJECT) {
-                        log_error("The image config lacks required object field 'root'");
+                        log_error("The OCI container config lacks required object field 'root'");
                         return -EINVAL;
                 }
 
@@ -467,6 +468,41 @@ static int parse_oci_image_config(const char *path) {
 
                 log_debug("Set -D=%s", arg_directory);
         }
+
+        process = json_variant_value(jv, "process");
+        if (!process || process->type != JSON_VARIANT_OBJECT) {
+                // TODO: can it be optional as per spec?
+                log_error("The OCI container config lacks required object 'process'");
+                return -EINVAL;
+        }
+
+        args = json_variant_value(process, "args");
+        if (!args || args->type != JSON_VARIANT_ARRAY) {
+                log_error("No args given in the OCI container config");
+                return -EINVAL;
+        }
+
+        for (i = 0; i < args->size; ++i) {
+                JsonVariant *arg;
+                char *arg_str;
+
+                arg = json_variant_element(args, i);
+                if (!arg || arg->type != JSON_VARIANT_STRING) {
+                        log_error("Invalid process argument");
+                        return -EINVAL;
+                }
+
+                arg_str = strdup(json_variant_string(arg));
+                if (!arg_str)
+                        return log_oom();
+
+                r = strv_push(&arg_parameters, arg_str);
+                if (r < 0)
+                        return log_oom();
+        }
+
+        log_debug("Arguments:");
+        strv_print(arg_parameters);
 
         return 0;
 }
@@ -1169,7 +1205,7 @@ static int parse_argv(int argc, char *argv[]) {
                 }
 
                 case ARG_OCI_IMAGE: {
-                        char *oci_image_path = NULL;
+                        _cleanup_free_ char *oci_image_path = NULL;
 
                         r = parse_path_argument_and_warn(optarg, false, &oci_image_path);
                         if (r < 0)
@@ -1282,6 +1318,9 @@ static int parse_argv(int argc, char *argv[]) {
         }
 
         if (argc > optind) {
+                if (arg_parameters)
+                        arg_parameters = strv_free(arg_parameters);
+
                 arg_parameters = strv_copy(argv + optind);
                 if (!arg_parameters)
                         return log_oom();
